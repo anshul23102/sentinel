@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Secrets — never commit
+backend/.env
+
+# Database — too large, regenerates on startup
+backend/api_logs.db
+backend/api_logs.db-shm
+backend/api_logs.db-wal
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
