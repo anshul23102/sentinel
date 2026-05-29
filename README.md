@@ -198,8 +198,6 @@ GROQ_API_KEY=your_groq_api_key_here
 
 ## Team
 
-**BloodWyrm** - AI Hackathon for Builders '26, Problem Statement #4
-
 | Name | Institute |
 |---|---|
 | Anshul Jain | Indraprastha Institute of Information Technology, Delhi |
@@ -208,6 +206,6 @@ GROQ_API_KEY=your_groq_api_key_here
 
 <div align="center">
 
-Built for **AI Hackathon for Builders '26** - Problem Statement #4
+Built for **CodeStorm 2026**
 
 </div>
