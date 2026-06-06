@@ -206,6 +206,4 @@ GROQ_API_KEY=your_groq_api_key_here
 
 <div align="center">
 
-Built for **CodeStorm 2026**
-
 </div>
