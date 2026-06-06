@@ -160,7 +160,7 @@ Open `http://localhost:5173`
 ## Project Structure
 
 ```
-sentinel-api-intelligence/
+sentinel/
 +-- backend/
 |   +-- main.py              # FastAPI app, WebSocket manager, SSE streaming
 |   +-- anomaly_detector.py  # Z-score detection, health snapshot, scoring
@@ -198,12 +198,14 @@ GROQ_API_KEY=your_groq_api_key_here
 
 ## Team
 
-| Name | Institute |
-|---|---|
-| Anshul Jain | Indraprastha Institute of Information Technology, Delhi |
+| Name | Institute | Team |
+|---|---|---|
+| Anshul Jain | Indraprastha Institute of Information Technology, Delhi | BLOODWYRM |
 
 ---
 
 <div align="center">
+
+Built for **Elite Coders Open Source Hackathon 2026**
 
 </div>
