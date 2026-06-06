@@ -133,8 +133,8 @@ WebSocket Broadcast --> React Dashboard (real-time)
 
 ### 1. Clone
 ```bash
-git clone https://github.com/anshul23102/sentinel-api-intelligence.git
-cd sentinel-api-intelligence
+git clone https://github.com/anshul23102/sentinel.git
+cd sentinel
 ```
 
 ### 2. Backend
