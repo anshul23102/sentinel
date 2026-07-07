@@ -157,6 +157,46 @@ Open `http://localhost:5173`
 
 ---
 
+## Docker Quick Start
+
+### Prerequisites
+- Docker
+- Docker Compose
+- Optional: Groq API key at [console.groq.com](https://console.groq.com) for AI analysis
+
+### Build
+```bash
+docker compose build
+```
+
+### Run
+macOS/Linux:
+```bash
+GROQ_API_KEY=your_groq_api_key_here docker compose up
+```
+
+PowerShell:
+```powershell
+$env:GROQ_API_KEY="your_groq_api_key_here"; docker compose up
+```
+
+If you do not need AI analysis, you can run without the key:
+```bash
+docker compose up
+```
+
+### Stop
+```bash
+docker compose down
+```
+
+### URLs
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:8000`
+- Backend API docs: `http://localhost:8000/docs`
+
+---
+
 ## Project Structure
 
 ```

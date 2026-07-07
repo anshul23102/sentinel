@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+.env
+api_logs.db
+api_logs.db-shm
+api_logs.db-wal
+*.log
