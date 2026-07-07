@@ -29,6 +29,7 @@ export function useWebSocket() {
   const [currentScenario, setCurrentScenario] = useState('normal')
   const [recentLogs,      setRecentLogs]      = useState([])
   const [liveStats,       setLiveStats]       = useState({ avgLatency: 0, errorRate: 0, rps: 0, maxLatency: 0 })
+  const [endpointHistory, setEndpointHistory] = useState({})
 
   // ── Demo mode: generate mock state every second ──────────────────────────
   const startDemoMode = useCallback(() => {
@@ -60,6 +61,14 @@ export function useWebSocket() {
         const snap = generateHealthSnapshot()
         setHealth(snap)
         setHealthHistory(prev => [...prev.slice(-39), { ts: Date.now(), data: snap }])
+        setEndpointHistory(prev => {
+          const next = { ...prev }
+          Object.entries(snap).forEach(([ep, s]) => {
+            const arr = prev[ep] || []
+            next[ep] = [...arr, { t: Date.now(), v: s.avg_latency_ms }].slice(-20)
+          })
+          return next
+        })
       }
 
       // Anomalies when in a failure scenario
@@ -133,6 +142,14 @@ export function useWebSocket() {
           case 'health':
             setHealth(msg.data)
             setHealthHistory(prev => [...prev.slice(-39), { ts: Date.now(), data: msg.data }])
+            setEndpointHistory(prev => {
+              const next = { ...prev }
+              Object.entries(msg.data).forEach(([ep, s]) => {
+                const arr = prev[ep] || []
+                next[ep] = [...arr, { t: Date.now(), v: s.avg_latency_ms }].slice(-20)
+              })
+              return next
+            })
             break
 
           case 'anomaly':
@@ -248,7 +265,7 @@ export function useWebSocket() {
 
   return {
     connected, demoMode, health, healthHistory, anomalies, aiAnalyses,
-    timeseries, currentScenario, recentLogs, liveStats,
+    timeseries, currentScenario, recentLogs, liveStats, endpointHistory,
     injectScenario, sendChat, getIncidentReport,
   }
 }

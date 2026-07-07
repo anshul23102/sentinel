@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts'
 
 const INFO = {
   '/api/checkout':      { desc: 'Payment processing and order creation', team: 'Payments',  sla: 200, icon: '💳', method: 'POST' },
@@ -17,7 +18,7 @@ const STATUS_STYLE = {
   healthy:  { color: '#6ee7b7', bg: 'rgba(52,211,153,0.1)',   border: 'rgba(52,211,153,0.22)',  dot: '#34d399' },
 }
 
-export default function Endpoints({ health }) {
+export default function Endpoints({ health, endpointHistory = {} }) {
   const entries = Object.entries(health).sort(([, a], [, b]) =>
     ({ critical: 0, degraded: 1, healthy: 2 }[a.status] || 2) -
     ({ critical: 0, degraded: 1, healthy: 2 }[b.status] || 2)
@@ -95,7 +96,7 @@ export default function Endpoints({ health }) {
             </div>
           )
           : entries.map(([ep, stats], i) => (
-            <EndpointRow key={ep} endpoint={ep} stats={stats} index={i} />
+            <EndpointRow key={ep} endpoint={ep} stats={stats} index={i} history={endpointHistory[ep] || []} />
           ))
         }
       </div>
@@ -103,7 +104,7 @@ export default function Endpoints({ health }) {
   )
 }
 
-function EndpointRow({ endpoint, stats, index }) {
+function EndpointRow({ endpoint, stats, index, history }) {
   const info   = INFO[endpoint] || { desc: 'API endpoint', team: 'Engineering', sla: 200, icon: '🔗', method: 'GET' }
   const ss     = STATUS_STYLE[stats.status] || STATUS_STYLE.healthy
   const isAlert = stats.status !== 'healthy'
@@ -204,6 +205,33 @@ function EndpointRow({ endpoint, stats, index }) {
               </span>
             )}
           </div>
+
+          {/* Sparkline */}
+          {history.length > 1 && (
+            <div style={{ height: 48, marginBottom: 12 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={history} margin={{ top: 2, right: 0, left: 0, bottom: 2 }}>
+                  <defs>
+                    <linearGradient id={`sg${endpoint.replace(/[^a-z0-9]/gi, '')}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor={ss.dot} stopOpacity={0.35} />
+                      <stop offset="95%" stopColor={ss.dot} stopOpacity={0}    />
+                    </linearGradient>
+                  </defs>
+                  <Tooltip
+                    contentStyle={{ background: '#0f0f1a', border: `1px solid ${ss.border}`, borderRadius: 8, fontSize: 11, padding: '4px 10px' }}
+                    formatter={v => [`${v}ms`, 'Latency']}
+                    labelFormatter={() => ''}
+                  />
+                  <Area
+                    type="monotone" dataKey="v" isAnimationActive={false}
+                    stroke={ss.dot} strokeWidth={1.5}
+                    fill={`url(#sg${endpoint.replace(/[^a-z0-9]/gi, '')})`}
+                    dot={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
           {/* Latency bar */}
           <div>
