@@ -1,4 +1,5 @@
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
+import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts'
 
 const INFO = {
   '/api/checkout':      { desc: 'Payment processing and order creation', team: 'Payments',  sla: 200, icon: '💳', method: 'POST' },
@@ -17,7 +18,22 @@ const STATUS_STYLE = {
   healthy:  { color: '#6ee7b7', bg: 'rgba(52,211,153,0.1)',   border: 'rgba(52,211,153,0.22)',  dot: '#34d399' },
 }
 
+const MAX_HISTORY = 20
+
 export default function Endpoints({ health }) {
+  // Rolling per-endpoint latency history: { [endpoint]: [{latency}] }
+  const historyRef = useRef({})
+
+  useEffect(() => {
+    Object.entries(health).forEach(([ep, stats]) => {
+      const prev = historyRef.current[ep] || []
+      historyRef.current[ep] = [
+        ...prev,
+        { latency: stats.avg_latency_ms }
+      ].slice(-MAX_HISTORY)
+    })
+  }, [health])
+
   const entries = Object.entries(health).sort(([, a], [, b]) =>
     ({ critical: 0, degraded: 1, healthy: 2 }[a.status] || 2) -
     ({ critical: 0, degraded: 1, healthy: 2 }[b.status] || 2)
@@ -56,10 +72,10 @@ export default function Endpoints({ health }) {
       {/* Summary tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 36 }}>
         {[
-          { label: 'Healthy',      count: counts.healthy,  sub: 'Operating normally',       st: 'healthy'  },
-          { label: 'Degraded',     count: counts.degraded, sub: 'Elevated latency / errors', st: 'degraded' },
-          { label: 'Critical',     count: counts.critical, sub: 'Immediate action required', st: 'critical' },
-          { label: 'Avg Uptime',   count: `${overallUptime}%`, sub: 'last 60s window',       st: overallUptime >= 99 ? 'healthy' : overallUptime >= 90 ? 'degraded' : 'critical' },
+          { label: 'Healthy',    count: counts.healthy,  sub: 'Operating normally',        st: 'healthy'  },
+          { label: 'Degraded',   count: counts.degraded, sub: 'Elevated latency / errors',  st: 'degraded' },
+          { label: 'Critical',   count: counts.critical, sub: 'Immediate action required',  st: 'critical' },
+          { label: 'Avg Uptime', count: `${overallUptime}%`, sub: 'last 60s window',        st: overallUptime >= 99 ? 'healthy' : overallUptime >= 90 ? 'degraded' : 'critical' },
         ].map(s => {
           const ss = STATUS_STYLE[s.st]
           return (
@@ -95,7 +111,13 @@ export default function Endpoints({ health }) {
             </div>
           )
           : entries.map(([ep, stats], i) => (
-            <EndpointRow key={ep} endpoint={ep} stats={stats} index={i} />
+            <EndpointRow
+              key={ep}
+              endpoint={ep}
+              stats={stats}
+              index={i}
+              latencyHistory={historyRef.current[ep] || []}
+            />
           ))
         }
       </div>
@@ -103,8 +125,54 @@ export default function Endpoints({ health }) {
   )
 }
 
-function EndpointRow({ endpoint, stats, index }) {
-  const info   = INFO[endpoint] || { desc: 'API endpoint', team: 'Engineering', sla: 200, icon: '🔗', method: 'GET' }
+function LatencySparkline({ data, status }) {
+  if (data.length < 2) return (
+    <div style={{ width: 140, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>building…</span>
+    </div>
+  )
+
+  const color = status === 'critical' ? '#f87171' : status === 'degraded' ? '#fbbf24' : '#34d399'
+
+  return (
+    <div style={{ width: 140, height: 44 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 4, right: 2, left: 2, bottom: 0 }}>
+          <defs>
+            <linearGradient id={`spark-${status}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor={color} stopOpacity={0.3} />
+              <stop offset="95%" stopColor={color} stopOpacity={0}   />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="latency"
+            stroke={color}
+            strokeWidth={1.5}
+            fill={`url(#spark-${status})`}
+            dot={false}
+            isAnimationActive={false}
+          />
+          <Tooltip
+            contentStyle={{
+              background: 'rgba(15,15,25,0.92)',
+              border: `1px solid ${color}44`,
+              borderRadius: 6,
+              fontSize: 11,
+              padding: '3px 8px',
+              color: 'rgba(255,255,255,0.8)',
+            }}
+            formatter={(v) => [`${v}ms`, 'latency']}
+            labelFormatter={() => ''}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function EndpointRow({ endpoint, stats, index, latencyHistory }) {
+  const info   = INFO[endpoint] || { desc: 'API endpoint', team: 'Engineering', sla: 200, icon: '🔧', method: 'GET' }
   const ss     = STATUS_STYLE[stats.status] || STATUS_STYLE.healthy
   const isAlert = stats.status !== 'healthy'
   const latPct  = Math.min(100, (stats.avg_latency_ms / (info.sla * 3)) * 100)
@@ -113,7 +181,6 @@ function EndpointRow({ endpoint, stats, index }) {
   const uptime  = stats.uptime_pct ?? 100
   const ref     = useRef(null)
 
-  // Latency bar color based on SLA breach
   const latBarBg = latPct > 80
     ? 'linear-gradient(90deg, #dc2626, #f87171)'
     : latPct > 50
@@ -188,10 +255,7 @@ function EndpointRow({ endpoint, stats, index }) {
             <span style={{ color: '#c4b5fd', fontWeight: 500 }}>{info.team}</span>
             <span style={{ color: 'rgba(255,255,255,0.15)' }}>·</span>
             <span>
-              SLA <span style={{
-                fontWeight: 700,
-                color: slaOk ? '#34d399' : '#f87171',
-              }}>{info.sla}ms</span>
+              SLA <span style={{ fontWeight: 700, color: slaOk ? '#34d399' : '#f87171' }}>{info.sla}ms</span>
             </span>
             {slaBreached && (
               <span style={{
@@ -214,7 +278,6 @@ function EndpointRow({ endpoint, stats, index }) {
               </span>
             </div>
             <div style={{ height: 5, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
-              {/* SLA marker */}
               <div style={{
                 position: 'absolute', left: `${Math.min(100, (info.sla / (info.sla * 3)) * 100)}%`,
                 top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.2)', zIndex: 1,
@@ -234,46 +297,40 @@ function EndpointRow({ endpoint, stats, index }) {
           </div>
         </div>
 
-        {/* Right: metric tiles */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, minWidth: 180 }}>
-          {[
-            {
-              label: 'Error Rate',
-              val: `${(stats.error_rate * 100).toFixed(1)}%`,
-              warn: stats.error_rate > 0.05,
-              warnColor: '#f87171',
-            },
-            {
-              label: 'P95 Latency',
-              val: `${stats.p95_latency_ms}ms`,
-              warn: stats.p95_latency_ms > info.sla * 2,
-              warnColor: '#fbbf24',
-            },
-            {
-              label: 'Avg Latency',
-              val: `${stats.avg_latency_ms}ms`,
-              warn: !slaOk,
-              warnColor: '#f87171',
-            },
-            {
-              label: 'Uptime',
-              val: `${uptime}%`,
-              warn: uptime < 95,
-              warnColor: uptime < 90 ? '#f87171' : '#fbbf24',
-            },
-          ].map(m => (
-            <div key={m.label} style={{
-              background: m.warn ? `rgba(${m.warnColor === '#f87171' ? '248,113,113' : '251,191,36'},0.08)` : 'rgba(255,255,255,0.025)',
-              border: `1px solid ${m.warn ? (m.warnColor === '#f87171' ? 'rgba(248,113,113,0.2)' : 'rgba(251,191,36,0.18)') : 'rgba(255,255,255,0.06)'}`,
-              borderRadius: 10, padding: '10px 12px',
-            }}>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.42)', marginBottom: 5, fontWeight: 500 }}>{m.label}</div>
-              <div style={{
-                fontSize: 15, fontWeight: 700,
-                color: m.warn ? m.warnColor : 'rgba(255,255,255,0.78)',
-              }}>{m.val}</div>
+        {/* Right: sparkline + metric tiles */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 180 }}>
+
+          {/* Sparkline */}
+          <div style={{
+            background: 'rgba(255,255,255,0.025)',
+            border: `1px solid ${isAlert ? ss.border : 'rgba(255,255,255,0.06)'}`,
+            borderRadius: 10,
+            padding: '6px 8px 2px',
+          }}>
+            <div style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
+              Latency trend
             </div>
-          ))}
+            <LatencySparkline data={latencyHistory} status={stats.status} />
+          </div>
+
+          {/* Metric tiles */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+            {[
+              { label: 'Error Rate',  val: `${(stats.error_rate * 100).toFixed(1)}%`, warn: stats.error_rate > 0.05, warnColor: '#f87171' },
+              { label: 'P95 Latency', val: `${stats.p95_latency_ms}ms`, warn: stats.p95_latency_ms > info.sla * 2, warnColor: '#fbbf24' },
+              { label: 'Avg Latency', val: `${stats.avg_latency_ms}ms`, warn: !slaOk, warnColor: '#f87171' },
+              { label: 'Uptime',      val: `${uptime}%`, warn: uptime < 95, warnColor: uptime < 90 ? '#f87171' : '#fbbf24' },
+            ].map(m => (
+              <div key={m.label} style={{
+                background: m.warn ? `rgba(${m.warnColor === '#f87171' ? '248,113,113' : '251,191,36'},0.08)` : 'rgba(255,255,255,0.025)',
+                border: `1px solid ${m.warn ? (m.warnColor === '#f87171' ? 'rgba(248,113,113,0.2)' : 'rgba(251,191,36,0.18)') : 'rgba(255,255,255,0.06)'}`,
+                borderRadius: 10, padding: '10px 12px',
+              }}>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.42)', marginBottom: 5, fontWeight: 500 }}>{m.label}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: m.warn ? m.warnColor : 'rgba(255,255,255,0.78)' }}>{m.val}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
