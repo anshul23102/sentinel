@@ -123,11 +123,6 @@ echo "=================================================="
 success "Sentinel installation completed successfully!"
 echo "=================================================="
 echo
-echo
-echo "=================================================="
-success "Sentinel installation completed successfully!"
-echo "=================================================="
-echo
 
 info "Starting backend..."
 
