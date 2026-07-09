@@ -8,6 +8,13 @@ import Assistant from './pages/Assistant'
 import WelcomeModal from './components/WelcomeModal'
 import SparkField from './components/SparkField'
 import ToastNotifications from './components/ToastNotifications'
+import { Moon, Sun } from 'lucide-react'
+function getInitialTheme() {
+  if (typeof window === 'undefined') return 'dark'
+  const saved = window.localStorage.getItem('sentinel-theme')
+  if (saved === 'light' || saved === 'dark') return saved
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
 
 function AlertBanner({ health }) {
   const criticals = Object.entries(health).filter(([, s]) => s.status === 'critical')
@@ -68,9 +75,22 @@ function AlertBanner({ health }) {
 }
 
 export default function App() {
-  const [page, setPage]               = useState('overview')
+  const [page, setPage] = useState('overview')
   const [showWelcome, setShowWelcome] = useState(true)
-  const ws                            = useWebSocket()
+  const [theme, setTheme] = useState(getInitialTheme)
+  const ws = useWebSocket()
+
+  const isDark = theme === 'dark'
+
+  const toggleTheme = () => {
+    setTheme(isDark ? 'light' : 'dark')
+  }
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    document.documentElement.style.colorScheme = theme
+    window.localStorage.setItem('sentinel-theme', theme)
+  }, [theme])
 
   useEffect(() => {
     const move = (e) => {
@@ -94,10 +114,10 @@ export default function App() {
   }, [])
 
   const pages = { overview: Overview, endpoints: Endpoints, incidents: Incidents, assistant: Assistant }
-  const Page  = pages[page]
+  const Page = pages[page]
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#04050d', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--app-bg)', color: 'var(--app-text)', position: 'relative', overflow: 'hidden', transition: 'background 0.3s ease, color 0.3s ease' }}>
 
       <SparkField />
       <div className="cursor-glow" style={{ zIndex: 0 }} />
@@ -147,13 +167,191 @@ export default function App() {
 
       <AlertBanner health={ws.health} />
 
-      <main style={{ flex: 1, marginLeft: 220, overflowY: 'auto', position: 'relative', zIndex: 1 }}>
-        <div key={page} className="page-wrapper">
-          <Page {...ws} />
+      <main style={{ flex: 1, marginLeft: 220, overflowY: 'auto', position: 'relative', zIndex: 1, background: theme === 'dark' ? 'transparent' : 'transparent' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 28px 12px', position: 'sticky', top: 0, zIndex: 3, background: theme === 'dark' ? 'rgba(4,5,13,0.75)' : 'rgba(255,255,255,0.6)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderBottom: theme === 'dark' ? 'none' : '1px solid rgba(148,163,184,0.18)' }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--app-muted)', marginBottom: 4 }}>Operations Center</div>
+            <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--app-text)' }}>NexusCommerce</div>
+          </div>
+          <div
+            className='bg-blue-400 p-10'
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            {/* Toggle theme button */}
+            <button
+              onClick={toggleTheme}
+              role="switch"
+              aria-checked={isDark}
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              style={{
+                position: "relative",
+                display: "flex",
+                height: "36px",
+                width: "68px",
+                flexShrink: 0,
+                alignItems: "center",
+                borderRadius: "9999px",
+                border: "1px solid",
+                padding: "3px",
+                transition: "all 500ms ease-out",
+                border: isDark
+                  ? "1px solid rgba(167, 139, 250, 0.25)" // violet-400/25
+                  : "1px solid rgba(253, 230, 138, 0.7)", // amber-200/70
+
+                background: isDark
+                  ? "linear-gradient(to bottom right, #1e1b4b, #2e1065, #0f172a)"
+                  : "linear-gradient(to bottom right, #fffbeb, #f0f9ff, #f5f3ff)",
+
+                boxShadow: isDark
+                  ? "0 0 0 1px rgba(139,92,246,0.08), 0 4px 16px rgba(76,29,149,0.45)"
+                  : "0 2px 10px rgba(251,191,36,0.28)",
+
+                transition: "all 500ms ease-out",
+              }}
+
+            >
+              {/* Ambient stars — dark mode only */}
+              <span
+                style={{
+                  position: "absolute",
+                  left: "10px",
+                  top: "7px",
+                  width: "3px",
+                  height: "3px",
+                  borderRadius: "9999px",
+                  backgroundColor: "#fff",
+                  opacity: isDark ? 0.7 : 0,
+                  transition: "opacity 500ms",
+                }}
+              />
+              <span
+                style={{
+                  position: "absolute",
+                  left: "18px",
+                  top: "13px",
+                  width: "2px",
+                  height: "2px",
+                  borderRadius: "9999px",
+                  backgroundColor: "#fff",
+                  opacity: isDark ? 0.5 : 0,
+                  transition: "opacity 500ms 100ms", // duration + delay
+                }}
+              />
+              <span
+                style={{
+                  position: "absolute",
+                  left: "12px",
+                  top: "19px",
+                  width: "2px",
+                  height: "2px",
+                  borderRadius: "9999px",
+                  backgroundColor: "#fff",
+                  opacity: isDark ? 0.6 : 0,
+                  transition: "opacity 500ms 150ms", // duration + delay
+                }}
+              />
+              {/* Sun rays — light mode only */}
+              <span
+                style={{
+                  position: "absolute",
+                  right: "9px",
+                  top: "50%",
+                  width: "1.5px",
+                  height: "12px",
+                  transform: "translateY(-50%)",
+                  borderRadius: "9999px",
+                  backgroundColor: "#fcd34d", // amber-300
+                  opacity: isDark ? 0 : 0.8,
+                  transition: "opacity 500ms",
+                }}
+              />
+              <span
+                style={{
+                  position: "absolute",
+                  right: "5px",
+                  top: "50%",
+                  width: "12px",
+                  height: "1.5px",
+                  transform: "translateY(-50%)",
+                  borderRadius: "9999px",
+                  backgroundColor: "#fcd34d", // amber-300
+                  opacity: isDark ? 0 : 0.8,
+                  transition: "opacity 500ms",
+                }}
+              />
+              {/* Sliding thumb */}
+              <div
+                style={{
+                  position: "relative",
+                  zIndex: 10,
+                  display: "flex",
+                  width: "26px",
+                  height: "26px",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "9999px",
+
+                  transform: isDark
+                    ? "translateX(36px)"
+                    : "translateX(0)",
+
+                  background: isDark
+                    ? "linear-gradient(to bottom right, #f1f5f9, #cbd5e1)"
+                    : "linear-gradient(to bottom right, #fcd34d, #fb923c)",
+
+                  boxShadow: isDark
+                    ? "0 2px 8px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.6)"
+                    : "0 2px 8px rgba(217,119,6,0.5), inset 0 1px 1px rgba(255,255,255,0.5)",
+
+                  transition: "all 500ms ease-out",
+                }}
+              >
+                <Moon
+                  style={{
+                    position: "absolute",
+                    width: "14px",
+                    height: "14px",
+                    color: "#312e81", // indigo-900
+
+                    transform: isDark
+                      ? "rotate(0deg) scale(1)"
+                      : "rotate(-90deg) scale(0)",
+
+                    opacity: isDark ? 1 : 0,
+
+                    transition: "all 300ms",
+                  }}
+                />
+                <Sun
+                  style={{
+                    position: "absolute",
+                    width: "14px",
+                    height: "14px",
+                    color: "#ffffff",
+
+                    transform: isDark
+                      ? "rotate(90deg) scale(0)"
+                      : "rotate(0deg) scale(1)",
+
+                    opacity: isDark ? 0 : 1,
+
+                    transition: "all 300ms",
+                  }}
+                />
+              </div>
+            </button>
+          </div>
+
+        </div>
+        <div key={page} className="page-wrapper" style={{ padding: '0 24px 24px' }}>
+          <div style={{ background: theme === 'dark' ? 'transparent' : 'rgba(255,255,255,0.56)', border: theme === 'dark' ? 'none' : `1px solid var(--app-panel-border)`, borderRadius: 24, boxShadow: theme === 'dark' ? 'none' : `0 18px 44px var(--app-shadow)`, padding: 18, backdropFilter: theme === 'dark' ? 'none' : 'blur(24px)', WebkitBackdropFilter: theme === 'dark' ? 'none' : 'blur(24px)' }}>
+            <Page {...ws} />
+          </div>
         </div>
       </main>
 
-      {showWelcome && <WelcomeModal onClose={() => setShowWelcome(false)} />}
+      {showWelcome && <WelcomeModal onClose={() => setShowWelcome(false)} theme={theme} />}
       <ToastNotifications anomalies={ws.anomalies} />
     </div>
   )

@@ -43,7 +43,7 @@ export default function Endpoints({ health }) {
         </div>
         <h1 style={{
           fontSize: 48, fontWeight: 900, letterSpacing: '-2px', lineHeight: 1.1, marginBottom: 14,
-          background: 'linear-gradient(135deg, #ffffff 20%, #c4b5fd 55%, #67e8f9 100%)',
+          background: 'var(--heading-gradient)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
         }}>
           API Endpoints

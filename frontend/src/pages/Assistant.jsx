@@ -142,7 +142,7 @@ export default function Assistant({ getIncidentReport, anomalies }) {
             </div>
             <h1 style={{
               fontSize: 34, fontWeight: 900, letterSpacing: '-1px',
-              background: 'linear-gradient(135deg, #ffffff 40%, #c4b5fd 100%)',
+              background: 'var(--heading-gradient)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
             }}>
               Sentinel AI

@@ -55,12 +55,14 @@ export default function Sidebar({ page, setPage, anomalyCount, connected, demoMo
   return (
     <div style={{
       position: 'fixed', left: 0, top: 0, bottom: 0, width: 220,
-      background: 'rgba(7,8,12,0.95)',
+      background: 'var(--app-surface-strong)',
       backdropFilter: 'blur(28px)',
       WebkitBackdropFilter: 'blur(28px)',
-      borderRight: '1px solid rgba(139,92,246,0.1)',
+      borderRight: '1px solid var(--app-border)',
       display: 'flex', flexDirection: 'column',
       zIndex: 50,
+      color: 'var(--app-text)',
+      transition: 'background 0.3s ease, border-color 0.3s ease',
     }}>
 
       {/* Brand */}
@@ -78,19 +80,19 @@ export default function Sidebar({ page, setPage, anomalyCount, connected, demoMo
             </svg>
           </div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: 'white', letterSpacing: '-0.2px' }}>Sentinel</div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>API Intelligence</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--app-text)', letterSpacing: '-0.2px' }}>Sentinel</div>
+            <div style={{ fontSize: 10, color: 'var(--app-muted-strong)', marginTop: 1 }}>API Intelligence</div>
           </div>
         </div>
 
         {/* Status pill with health score */}
         <div style={{
           padding: '11px 13px', borderRadius: 11,
-          background: 'rgba(139,92,246,0.06)',
-          border: '1px solid rgba(139,92,246,0.15)',
+          background: 'var(--app-pill-bg)',
+          border: '1px solid var(--app-pill-border)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.78)' }}>NexusCommerce</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--app-nav-text)' }}>NexusCommerce</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <div style={{
                 width: 5, height: 5, borderRadius: '50%',
@@ -98,17 +100,17 @@ export default function Sidebar({ page, setPage, anomalyCount, connected, demoMo
                 boxShadow: connected ? '0 0 8px rgba(167,139,250,1)' : 'none',
                 animation: connected ? 'pulse 2s infinite' : 'none',
               }} />
-              <span style={{ fontSize: 10, color: connected ? (demoMode ? '#fbbf24' : '#c4b5fd') : 'rgba(255,255,255,0.3)', fontWeight: 600 }}>
+              <span style={{ fontSize: 10, color: connected ? (demoMode ? '#fbbf24' : '#c4b5fd') : 'var(--app-muted-strong)', fontWeight: 600 }}>
                 {connected ? (demoMode ? 'Demo' : 'Live') : 'Off'}
               </span>
             </div>
           </div>
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.32)', marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: 'var(--app-muted)', marginBottom: 10 }}>
             Production · us-east-1
           </div>
           {/* Health Score bar */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.38)', fontWeight: 500 }}>Health Score</span>
+            <span style={{ fontSize: 10, color: 'var(--app-muted)', fontWeight: 500 }}>Health Score</span>
             <span style={{
               fontSize: 12, fontWeight: 800, color: scoreColor,
               textShadow: `0 0 10px ${scoreColor}66`,
@@ -134,7 +136,7 @@ export default function Sidebar({ page, setPage, anomalyCount, connected, demoMo
 
       {/* Pages label */}
       <div style={{ padding: '0 20px 10px' }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--app-muted-strong)', textTransform: 'uppercase', letterSpacing: '1px' }}>
           Pages
         </span>
       </div>
@@ -153,8 +155,8 @@ export default function Sidebar({ page, setPage, anomalyCount, connected, demoMo
               {item.label}
               <span style={{
                 marginLeft: 'auto', fontSize: 9, fontWeight: 600,
-                color: active ? 'rgba(196,181,253,0.5)' : 'rgba(255,255,255,0.15)',
-                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)',
+                color: active ? 'rgba(196,181,253,0.5)' : 'var(--app-muted-strong)',
+                background: 'var(--app-card-bg)', border: '1px solid var(--app-card-border)',
                 borderRadius: 4, padding: '1px 5px', flexShrink: 0, fontFamily: 'monospace',
               }}>{idx + 1}</span>
               {item.badge && anomalyCount > 0 && (
@@ -173,13 +175,13 @@ export default function Sidebar({ page, setPage, anomalyCount, connected, demoMo
 
       {/* Footer */}
       <div style={{ padding: '16px 20px 24px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', lineHeight: 1.9, marginBottom: 8 }}>
+        <div style={{ fontSize: 10, color: 'var(--app-muted-strong)', lineHeight: 1.9, marginBottom: 8 }}>
           8 endpoints monitored<br />
           Llama 3.3 70B via Groq
         </div>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 5,
-          fontSize: 9, color: 'rgba(255,255,255,0.15)', fontFamily: 'monospace',
+          fontSize: 9, color: 'var(--app-muted-strong)', fontFamily: 'monospace',
         }}>
           <span style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3, padding: '1px 4px' }}>1-4</span>
           <span>navigate</span>
