@@ -87,9 +87,21 @@ async def periodic_scan():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    asyncio.create_task(log_pipeline())
-    asyncio.create_task(periodic_scan())
-    yield
+
+    pipeline_task = asyncio.create_task(log_pipeline())
+    scan_task = asyncio.create_task(periodic_scan())
+
+    try:
+        yield
+    finally:
+        pipeline_task.cancel()
+        scan_task.cancel()
+
+        await asyncio.gather(
+            pipeline_task,
+            scan_task,
+            return_exceptions=True,
+        )
 
 app = FastAPI(title="Sentinel — API Intelligence Platform", lifespan=lifespan)
 
