@@ -32,7 +32,7 @@ export default function LiveChart({ timeseries }) {
   })).slice(-60)
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12}}>
 
       <ChartCard title="Response Latency" unit="ms" color="#22d3ee" sub="SLA 200ms">
         <ResponsiveContainer width="100%" height={130}>
@@ -97,7 +97,7 @@ export default function LiveChart({ timeseries }) {
 function ChartCard({ title, unit, color, sub, children }) {
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.022)',
+      background: 'var(--bg-03)',
       border: '1px solid rgba(255,255,255,0.07)',
       borderTop: `1px solid ${color}22`,
       borderRadius: 14, padding: '14px 14px 8px',

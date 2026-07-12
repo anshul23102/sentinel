@@ -22,6 +22,8 @@ style.textContent = `
     --p2-rgb: 167,139,250;
     --p3-rgb: 196,181,253;
     --c1-rgb: 6,182,212;
+    --c2-rgb: 34,211,238;
+    --c3-rgb: 103,232,249;
     --app-bg: #04050d;
     --app-surface: rgba(7, 8, 12, 0.95);
     --app-surface-strong: rgba(7, 8, 12, 0.98);
@@ -66,6 +68,7 @@ style.textContent = `
     --text-45: rgba(255,255,255,0.45);
     --text-50: rgba(255,255,255,0.5);
     --text-55: rgba(255,255,255,0.55);
+    --text-58 : rgba(255,255,255,0.58);
     --text-62: rgba(255,255,255,0.62);
     --text-70: rgba(255,255,255,0.7);
     --text-85: rgba(255,255,255,0.85);

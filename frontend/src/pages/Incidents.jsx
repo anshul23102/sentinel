@@ -36,7 +36,7 @@ export default function Incidents({ anomalies, aiAnalyses }) {
 
       {/* Header */}
       <div style={{ marginBottom: 44, textAlign: 'center' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-35)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 14 }}>
           Observability
         </div>
         <h1 style={{
@@ -46,23 +46,23 @@ export default function Incidents({ anomalies, aiAnalyses }) {
         }}>
           Incidents
         </h1>
-        <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.38)', lineHeight: 1.7, maxWidth: 420, margin: '0 auto' }}>
+        <p style={{ fontSize: 15, color: 'var(--text-38)', lineHeight: 1.7, maxWidth: 420, margin: '0 auto' }}>
           AI-diagnosed anomalies with root cause chains and actionable fix steps
         </p>
       </div>
 
       {/* Filter bar */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 28, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', letterSpacing: '0.7px', marginRight: 4 }}>Filter</span>
+        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-22)', textTransform: 'uppercase', letterSpacing: '0.7px', marginRight: 4 }}>Filter</span>
         {FILTERS.map(f => {
           const active = filter === f
           const count  = counts[f]
           return (
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: '5px 13px', borderRadius: 20, fontSize: 11, fontWeight: active ? 600 : 400,
-              border:     `1px solid ${active ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.09)'}`,
-              background: active ? 'rgba(139,92,246,0.15)' : 'transparent',
-              color:      active ? '#c4b5fd' : 'rgba(255,255,255,0.42)',
+              border:     `1px solid ${active ? 'rgba(167,139,250,0.4)' : 'var(--text-09)'}`,
+              background: active ? 'var(--app-pill-border)' : 'transparent',
+              color:      active ? 'var(--p3)' : 'var(--text-42)',
               cursor: 'pointer', transition: 'all 0.15s',
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
@@ -71,14 +71,14 @@ export default function Incidents({ anomalies, aiAnalyses }) {
                 <span style={{
                   fontSize: 9, fontWeight: 700, minWidth: 16, height: 16, borderRadius: 8,
                   background: active ? 'rgba(196,181,253,0.25)' : 'rgba(255,255,255,0.1)',
-                  color: active ? '#ddd6fe' : 'rgba(255,255,255,0.5)',
+                  color: active ? '#ddd6fe' : 'var(--text-50)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
                 }}>{count}</span>
               )}
             </button>
           )
         })}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-20)' }}>
           {filtered.length} incident{filtered.length !== 1 ? 's' : ''}
         </span>
       </div>
@@ -86,15 +86,15 @@ export default function Incidents({ anomalies, aiAnalyses }) {
       {filtered.length === 0 ? (
         <div style={{
           padding: '64px 48px', borderRadius: 16, textAlign: 'center',
-          background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.08)',
+          background: 'var(--bg-025)', border: '1px solid var(--bg-08)',
         }}>
           <div style={{ fontSize: 28, marginBottom: 16, opacity: 0.5 }}>✦</div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'rgba(255,255,255,0.5)', marginBottom: 10 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-42)', marginBottom: 10 }}>
             {filter === 'all' ? 'No incidents detected' : `No ${filter} incidents`}
           </div>
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', lineHeight: 1.8, maxWidth: 340, margin: '0 auto' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-30)', lineHeight: 1.8, maxWidth: 340, margin: '0 auto' }}>
             Inject a failure from the Overview page to see AI diagnosis in action.
-            Try <span style={{ color: '#c4b5fd', fontWeight: 600 }}>"DB Slowdown"</span> — incidents appear within 5 seconds.
+            Try <span style={{ color: 'var(--p3)', fontWeight: 600 }}>"DB Slowdown"</span> — incidents appear within 5 seconds.
           </div>
         </div>
       ) : (
@@ -142,7 +142,7 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
 
   return (
     <div style={{
-      background: open ? `${sevStyle.bg}` : 'rgba(255,255,255,0.025)',
+      background: open ? `${sevStyle.bg}` : 'var(--bg-025)',
       border: `1px solid ${open ? sevStyle.border : 'rgba(255,255,255,0.08)'}`,
       borderLeft: `3px solid ${open ? sevStyle.dot : 'rgba(255,255,255,0.1)'}`,
       borderRadius: 14, overflow: 'hidden',
@@ -276,7 +276,7 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '13px 16px', borderRadius: 12,
-              background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.08)',
+              background: 'var(--bg-025)', border: '1px solid rgba(255,255,255,0.08)',
               fontSize: 13, color: 'rgba(255,255,255,0.4)',
             }}>
               <div style={{

@@ -82,7 +82,7 @@ export default function ToastNotifications({ anomalies }) {
                     </span>
                     <span style={{
                       fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)',
-                      background: 'rgba(255,255,255,0.06)', padding: '1px 7px', borderRadius: 20,
+                      background: 'var(--text-06)', padding: '1px 7px', borderRadius: 20,
                       textTransform: 'uppercase', letterSpacing: '0.4px',
                     }}>
                       {t.severity}
@@ -122,7 +122,7 @@ export default function ToastNotifications({ anomalies }) {
               </div>
 
               {/* Countdown bar */}
-              <div style={{ marginTop: 12, height: 2, background: 'rgba(255,255,255,0.06)', borderRadius: 2 }}>
+              <div style={{ marginTop: 12, height: 2, background: 'var(--text-06)', borderRadius: 2 }}>
                 <div style={{
                   height: '100%', borderRadius: 2,
                   background: cfg.color,

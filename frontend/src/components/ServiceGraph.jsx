@@ -251,7 +251,7 @@ export default function ServiceGraph({ health }) {
       {/* Header */}
       <div style={{
         padding: '14px 18px',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        borderBottom: '1px solid var(--text-06)',
         display: 'flex', alignItems: 'center', gap: 12,
       }}>
         <div style={{ display: 'flex', gap: 5 }}>
@@ -259,7 +259,7 @@ export default function ServiceGraph({ health }) {
             <div key={i} style={{ width: 9, height: 9, borderRadius: '50%', background: c }} />
           ))}
         </div>
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-50)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
           Service Dependency Graph
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>

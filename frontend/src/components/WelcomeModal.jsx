@@ -75,11 +75,10 @@ export default function WelcomeModal({ onClose, theme = 'dark' }) {
   // Theme-aware tokens — mirrors the palette used across the rest of the app
   const c = {
     overlayBg:      isDark ? 'rgba(0,0,0,0.82)'        : 'rgba(15,15,26,0.42)',
-    cardBg:         isDark ? 'rgba(5,6,14,0.98)'        : 'rgba(255,255,255,0.98)',
     cardBorder:     isDark ? 'rgba(255,255,255,0.1)'    : 'rgba(15,10,30,0.1)',
     cardShadow:     isDark
       ? '0 48px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(139,92,246,0.1)'
-      : '0 32px 80px rgba(76,29,149,0.16), 0 0 0 1px rgba(124,58,237,0.08)',
+      : '0 32px 80px rgba(76,29,149,0.16), 0 0 0 1px var(--app-surface-soft)',
     heading:        isDark ? '#ffffff' : '#0f0a1e',
     subtext:        isDark ? 'rgba(255,255,255,0.35)'   : 'rgba(15,10,30,0.45)',
     body:           isDark ? 'rgba(255,255,255,0.45)'   : 'rgba(15,10,30,0.55)',
@@ -99,7 +98,7 @@ export default function WelcomeModal({ onClose, theme = 'dark' }) {
     featureRowBorder: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(124,58,237,0.14)',
     featureTitle:   isDark ? 'rgba(255,255,255,0.88)'   : 'rgba(15,10,30,0.9)',
     featureDesc:    isDark ? 'rgba(255,255,255,0.4)'    : 'rgba(15,10,30,0.52)',
-    tipBg:          isDark ? 'rgba(124,58,237,0.07)'    : 'rgba(124,58,237,0.08)',
+    tipBg:          isDark ? 'rgba(124,58,237,0.07)'    : 'var(--app-surface-soft)',
     tipBorder:      isDark ? 'rgba(139,92,246,0.2)'     : 'rgba(124,58,237,0.24)',
     tipText:        isDark ? '#c4b5fd'                  : '#6d28d9',
     hintBorder:     isDark ? 'rgba(255,255,255,0.05)'   : 'rgba(15,10,30,0.08)',

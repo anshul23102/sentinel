@@ -118,7 +118,7 @@ export default function Sidebar({ page, setPage, anomalyCount, connected, demoMo
               // key trick done via parent re-render
             }}>{score}</span>
           </div>
-          <div style={{ height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 3 }}>
+          <div style={{ height: 3, background: 'var(--text-06)', borderRadius: 3 }}>
             <div style={{
               height: '100%', borderRadius: 3,
               width: `${score}%`,
@@ -155,7 +155,7 @@ export default function Sidebar({ page, setPage, anomalyCount, connected, demoMo
               {item.label}
               <span style={{
                 marginLeft: 'auto', fontSize: 9, fontWeight: 600,
-                color: active ? 'rgba(196,181,253,0.5)' : 'var(--app-muted-strong)',
+                color: 'var(--app-muted-strong)',
                 background: 'var(--app-card-bg)', border: '1px solid var(--app-card-border)',
                 borderRadius: 4, padding: '1px 5px', flexShrink: 0, fontFamily: 'monospace',
               }}>{idx + 1}</span>
@@ -183,9 +183,9 @@ export default function Sidebar({ page, setPage, anomalyCount, connected, demoMo
           display: 'flex', alignItems: 'center', gap: 5,
           fontSize: 9, color: 'var(--app-muted-strong)', fontFamily: 'monospace',
         }}>
-          <span style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3, padding: '1px 4px' }}>1-4</span>
+          <span style={{ background: 'var(--text-06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3, padding: '1px 4px' }}>1-4</span>
           <span>navigate</span>
-          <span style={{ marginLeft: 6, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3, padding: '1px 4px' }}>Esc</span>
+          <span style={{ marginLeft: 6, background: 'var(--text-06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3, padding: '1px 4px' }}>Esc</span>
           <span>dismiss</span>
         </div>
       </div>
