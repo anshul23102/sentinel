@@ -2,7 +2,7 @@ from groq import Groq
 import json
 import os
 from datetime import datetime
-from db import get_recent_logs, get_endpoint_stats, get_recent_anomalies
+from db import get_endpoint_stats, get_recent_anomalies
 from anomaly_detector import get_health_snapshot
 
 _api_key = os.environ.get("GROQ_API_KEY", "")

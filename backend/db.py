@@ -1,6 +1,5 @@
 import aiosqlite
 import json
-from datetime import datetime
 
 DB_PATH = "api_logs.db"
 

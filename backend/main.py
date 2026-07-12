@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import csv
 import io
 import aiosqlite
@@ -12,7 +11,6 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 load_dotenv()

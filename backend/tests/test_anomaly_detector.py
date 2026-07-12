@@ -21,7 +21,6 @@ from anomaly_detector import (
     _request_windows,
     _active_anomalies,
     LATENCY_Z_THRESHOLD,
-    ERROR_RATE_THRESHOLD,
     _z_score,
     _error_rate,
 )

@@ -1,7 +1,7 @@
 import numpy as np
 from collections import defaultdict, deque
 from datetime import datetime, timezone
-from db import get_recent_logs, insert_anomaly
+from db import insert_anomaly
 
 # Sliding windows per endpoint (60 seconds of data)
 _latency_windows: dict[str, deque] = defaultdict(lambda: deque(maxlen=60))
