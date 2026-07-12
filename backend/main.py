@@ -1,6 +1,11 @@
 import asyncio
 import json
 import os
+import csv
+import io
+import aiosqlite
+from db import DB_PATH
+from fastapi.responses import StreamingResponse
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -200,3 +205,36 @@ async def websocket_endpoint(ws: WebSocket):
                 pass  # ignore malformed frames — only WebSocketDisconnect exits the loop
     except WebSocketDisconnect:
         manager.disconnect(ws)
+
+@app.get("/api/incidents/export")
+async def export_incidents(format: str = "csv"):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM anomalies ORDER BY detected_at DESC"
+        )
+        rows = await cursor.fetchall()
+
+    incidents = [dict(row) for row in rows]
+
+    if format.lower() == "json":
+        content = json.dumps(incidents, indent=2, default=str)
+        return StreamingResponse(
+            io.StringIO(content),
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=sentinel_incidents.json"},
+        )
+
+    output = io.StringIO()
+    if incidents:
+        writer = csv.DictWriter(output, fieldnames=incidents[0].keys())
+        writer.writeheader()
+        writer.writerows(incidents)
+    else:
+        output.write("No incidents found")
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=sentinel_incidents.csv"},
+    )
