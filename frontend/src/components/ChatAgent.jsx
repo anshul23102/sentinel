@@ -48,7 +48,7 @@ export default function ChatAgent({ sendChat, getIncidentReport }) {
       {/* Header */}
       <div style={{
         padding: '16px 20px',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        borderBottom: '1px solid var(--text-06)',
         background: 'rgba(37,99,235,0.06)',
         display: 'flex', alignItems: 'center', gap: 12,
       }}>
@@ -101,7 +101,7 @@ export default function ChatAgent({ sendChat, getIncidentReport }) {
       {/* Input */}
       <div style={{
         padding: '12px 16px',
-        borderTop: '1px solid rgba(255,255,255,0.06)',
+        borderTop: '1px solid var(--text-06)',
         background: 'rgba(255,255,255,0.02)',
         display: 'flex', gap: 8,
       }}>
@@ -122,7 +122,7 @@ export default function ChatAgent({ sendChat, getIncidentReport }) {
         <button onClick={() => send(input)} disabled={loading || !input.trim()} style={{
           width: 40, height: 40, borderRadius: 12, border: 'none', flexShrink: 0,
           background: loading || !input.trim()
-            ? 'rgba(255,255,255,0.06)'
+            ? 'var(--text-06)'
             : 'linear-gradient(135deg, #2563eb, #7c3aed)',
           cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -158,7 +158,7 @@ function Bubble({ m }) {
         maxWidth: '86%',
         background: isUser
           ? 'linear-gradient(135deg, #2563eb, #1d4ed8)'
-          : 'rgba(255,255,255,0.06)',
+          : 'var(--text-06)',
         border: isUser ? 'none' : '1px solid rgba(255,255,255,0.08)',
         borderRadius: isUser ? '16px 16px 4px 16px' : '4px 16px 16px 16px',
         padding: '10px 14px',
@@ -188,7 +188,7 @@ function ThinkingBubble() {
         </svg>
       </div>
       <div style={{
-        background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
+        background: 'var(--text-06)', border: '1px solid rgba(255,255,255,0.08)',
         borderRadius: '4px 16px 16px 16px', padding: '12px 16px',
         display: 'flex', gap: 5, alignItems: 'center',
       }}>

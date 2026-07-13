@@ -106,7 +106,7 @@ function AnomalyRow({ anomaly, analysis }) {
 
       {/* Expanded details */}
       {open && (
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: 16 }}>
+        <div style={{ borderTop: '1px solid var(--text-06)', padding: 16 }}>
           {/* Root cause chain */}
           {anomaly.root_cause_chain?.length > 0 && (
             <div style={{ marginBottom: 14 }}>

@@ -55,10 +55,10 @@ function TiltCard({ children, style = {}, warn = false, flash = false }) {
       onMouseLeave={onLeave}
       style={{
         padding: '22px 24px', borderRadius: 16,
-        background: warn ? 'rgba(139,92,246,0.08)' : 'rgba(255,255,255,0.03)',
+        background: warn ? 'var(--app-pill-bg)' : 'var(--bg-03)',
         border: `1px solid ${warn ? 'rgba(139,92,246,0.28)' : 'rgba(255,255,255,0.07)'}`,
         boxShadow: warn
-          ? '0 0 28px rgba(139,92,246,0.12), inset 0 1px 0 rgba(255,255,255,0.06)'
+          ? '0 0 28px rgba(139,92,246,0.12), inset 0 1px 0 var(--text-06)'
           : 'inset 0 1px 0 rgba(255,255,255,0.03)',
         transition: 'background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease',
         animation: flash ? 'kpiFlash 0.45s ease' : 'none',
@@ -115,7 +115,7 @@ function CriticalCard({ critical, health }) {
       onMouseLeave={onLeave}
       style={{
         padding: '22px 24px', borderRadius: 16,
-        background: isAlert ? 'rgba(139,92,246,0.13)' : 'rgba(255,255,255,0.03)',
+        background: isAlert ? 'rgba(139,92,246,0.13)' : 'var(--bg-03)',
         border: `1px solid ${isAlert ? 'rgba(139,92,246,0.45)' : 'rgba(255,255,255,0.07)'}`,
         boxShadow: isAlert
           ? '0 0 40px rgba(139,92,246,0.22), 0 0 80px rgba(139,92,246,0.1), inset 0 1px 0 rgba(255,255,255,0.1)'
@@ -135,7 +135,7 @@ function CriticalCard({ critical, health }) {
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, color: isAlert ? 'rgba(196,181,253,0.7)' : 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.7px' }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: isAlert ? 'rgba(196,181,253,0.7)' : 'var(--text-35)', textTransform: 'uppercase', letterSpacing: '0.7px' }}>
           Critical
         </div>
         {isAlert && (
@@ -158,18 +158,18 @@ function CriticalCard({ critical, health }) {
           key={critical}
           style={{
             fontSize: 34, fontWeight: 800, letterSpacing: '-1.5px',
-            color: isAlert ? '#ffffff' : 'rgba(255,255,255,0.45)',
+            color: isAlert ? '#ffffff' : 'var(--text-45)',
             animation: 'kpiCount 0.3s ease',
             display: 'inline-block',
             textShadow: isAlert ? '0 0 24px rgba(196,181,253,0.8)' : 'none',
           }}
         >{critical}</span>
-        <span style={{ fontSize: 12, color: isAlert ? 'rgba(196,181,253,0.6)' : 'rgba(255,255,255,0.22)', fontWeight: 500 }}>
+        <span style={{ fontSize: 12, color: isAlert ? 'rgba(196,181,253,0.6)' : 'var(--text-22)', fontWeight: 500 }}>
           {critical === 1 ? 'endpoint' : 'endpoints'}
         </span>
       </div>
 
-      <div style={{ fontSize: 11, color: isAlert ? 'rgba(196,181,253,0.85)' : 'rgba(255,255,255,0.3)', lineHeight: 1.5 }}>
+      <div style={{ fontSize: 11, color: isAlert ? 'rgba(196,181,253,0.85)' : 'var(--text-30)', lineHeight: 1.5 }}>
         {isAlert
           ? affectedList.length > 0
             ? affectedList.join(', ') + (critical > 2 ? ` +${critical - 2} more` : '') + ' down'
@@ -193,7 +193,7 @@ function LiveLogStream({ recentLogs }) {
   function latColor(ms) {
     if (ms > 1000) return '#f87171'
     if (ms > 300)  return '#fbbf24'
-    return 'rgba(255,255,255,0.45)'
+    return 'var(--text-45)'
   }
 
   return (
@@ -208,7 +208,7 @@ function LiveLogStream({ recentLogs }) {
           <div style={{ width: 9, height: 9, borderRadius: '50%', background: 'rgba(251,191,36,0.8)' }} />
           <div style={{ width: 9, height: 9, borderRadius: '50%', background: 'rgba(52,211,153,0.8)' }} />
         </div>
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.6px' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-40)', letterSpacing: '0.6px' }}>
           LIVE LOG STREAM
         </span>
         <div style={{
@@ -242,7 +242,7 @@ function LiveLogStream({ recentLogs }) {
             }}>
               {log.status_code}
             </span>
-            <span style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0, minWidth: 32, fontSize: 10 }}>
+            <span style={{ color: 'var(--text-30)', flexShrink: 0, minWidth: 32, fontSize: 10 }}>
               {log.method}
             </span>
             <span style={{ color: 'rgba(167,139,250,0.9)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -349,7 +349,7 @@ function PredictiveInsights({ timeseries, health }) {
             <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{ins.icon}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: c.text, marginBottom: 2 }}>{ins.title}</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.42)', lineHeight: 1.5 }}>{ins.body}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-42)', lineHeight: 1.5 }}>{ins.body}</div>
             </div>
             <div style={{
               fontSize: 9, fontWeight: 700, color: c.icon, textTransform: 'uppercase', letterSpacing: '0.5px',
@@ -461,12 +461,12 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
         </div>
         <h1 style={{
           fontSize: 48, fontWeight: 900, letterSpacing: '-2px', lineHeight: 1.1, marginBottom: 14,
-          background: 'linear-gradient(135deg, #ffffff 20%, #c4b5fd 55%, #67e8f9 100%)',
+          background: 'var(--heading-gradient)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
         }}>
           System Overview
         </h1>
-        <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.38)', maxWidth: 440, margin: '0 auto', lineHeight: 1.7 }}>
+        <p style={{ fontSize: 15, color: 'var(--text-38)', maxWidth: 440, margin: '0 auto', lineHeight: 1.7 }}>
           Real-time API health across NexusCommerce. 2.4M daily orders, 8 monitored services.
         </p>
       </div>
@@ -475,7 +475,7 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr) 1.12fr', gap: 14, marginBottom: 44 }}>
         {normalKpis.map((k, i) => (
           <TiltCard key={i} warn={k.warn} flash={k.flash}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.32)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 11 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-32)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 11 }}>
               {k.label}
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginBottom: 5, flexWrap: 'wrap' }}>
@@ -483,15 +483,15 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
                 key={k.value}
                 style={{
                   fontSize: 34, fontWeight: 800, letterSpacing: '-1.5px',
-                  color: k.warn ? '#c4b5fd' : 'white',
+                  color: k.warn ? '#c4b5fd' : 'var(--text-50)',
                   animation: 'kpiCount 0.3s ease',
                   display: 'inline-block',
                 }}
               >{k.value}</span>
-              {k.unit && <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.32)', fontWeight: 500 }}>{k.unit}</span>}
+              {k.unit && <span style={{ fontSize: 12, color: 'var(--text-32)', fontWeight: 500 }}>{k.unit}</span>}
               {k.delta}
             </div>
-            <div style={{ fontSize: 11, color: k.warn ? 'rgba(196,181,253,0.65)' : 'rgba(255,255,255,0.3)' }}>
+            <div style={{ fontSize: 11, color: k.warn ? 'rgba(196,181,253,0.65)' : 'var(--text-30)' }}>
               {k.sub}
             </div>
           </TiltCard>
@@ -506,11 +506,11 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
         {/* Health Score */}
         <div style={{
           padding: '20px 22px', borderRadius: 14,
-          background: 'rgba(10,10,20,0.6)',
+          background: 'var(--bg-03)',
           border: '1px solid rgba(255,255,255,0.07)',
           display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 8 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-30)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 8 }}>
             System Health
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 10 }}>
@@ -521,9 +521,9 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
               animation: 'kpiCount 0.3s ease',
               display: 'inline-block',
             }}>{score}</span>
-            <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.25)', fontWeight: 500 }}>/100</span>
+            <span style={{ fontSize: 16, color: 'var(--text-25)', fontWeight: 500 }}>/100</span>
           </div>
-          <div style={{ height: 5, background: 'rgba(255,255,255,0.05)', borderRadius: 4 }}>
+          <div style={{ height: 5, background: 'var(--bg-05)', borderRadius: 4 }}>
             <div style={{
               height: '100%', borderRadius: 4, width: `${score}%`,
               background: score >= 80
@@ -535,7 +535,7 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
               boxShadow: `0 0 8px ${scoreColor}55`,
             }} />
           </div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 8 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-30)', marginTop: 8 }}>
             {score === 100 ? 'All systems nominal' : score >= 80 ? 'Minor degradation' : score >= 50 ? 'Partial outage' : 'Major incident'}
           </div>
         </div>
@@ -543,7 +543,7 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
         {/* Scenario bar */}
         <div style={{
           padding: '16px 20px', borderRadius: 14,
-          background: 'rgba(10,10,20,0.6)',
+          background: 'var(--bg-03)',
           border: '1px solid rgba(255,255,255,0.07)',
           display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         }}>
@@ -553,16 +553,16 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
               boxShadow: `0 0 8px ${scenario.color}`,
             }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: scenario.color }}>{scenario.label}</span>
-            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', flex: 1 }}>{scenario.desc}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-38)', flex: 1 }}>{scenario.desc}</span>
 
             {/* Demo auto-play button */}
             {demoRunning ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginBottom: 2 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-35)', marginBottom: 2 }}>
                     {demoIdx + 1}/{DEMO_SEQUENCE.length} · next in {demoCountdown}s
                   </div>
-                  <div style={{ width: 120, height: 3, background: 'rgba(255,255,255,0.07)', borderRadius: 2 }}>
+                  <div style={{ width: 120, height: 3, background: 'var(--bg-07)', borderRadius: 2 }}>
                     <div style={{
                       height: '100%', borderRadius: 2, background: '#a78bfa',
                       width: `${((DEMO_DURATION - demoCountdown) / DEMO_DURATION) * 100}%`,
@@ -585,19 +585,19 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
                 style={{
                   padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                   border: '1px solid rgba(167,139,250,0.3)', background: 'rgba(139,92,246,0.1)',
-                  color: '#c4b5fd', cursor: 'pointer', transition: 'all 0.18s', flexShrink: 0,
+                  color: '#7C3AED', cursor: 'pointer', transition: 'all 0.18s', flexShrink: 0,
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.2)'; e.currentTarget.style.borderColor = 'rgba(167,139,250,0.5)' }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.1)'; e.currentTarget.style.borderColor = 'rgba(167,139,250,0.3)' }}
               >
-                <svg width="9" height="9" viewBox="0 0 12 12" fill="#c4b5fd"><polygon points="2,1 11,6 2,11" /></svg>
+                <svg width="9" height="9" viewBox="0 0 12 12" fill="#7C3AED"><polygon points="2,1 11,6 2,11" /></svg>
                 Auto Demo
               </button>
             )}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', fontWeight: 600, letterSpacing: '0.6px', marginRight: 2 }}>SIMULATE</span>
+            <span style={{ fontSize: 10, color: 'var(--text-22)', fontWeight: 600, letterSpacing: '0.6px', marginRight: 2 }}>SIMULATE</span>
             {Object.entries(SCENARIOS).map(([key, s]) => {
               const active = currentScenario === key
               return (
@@ -605,12 +605,12 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
                   padding: '6px 14px', borderRadius: 20, fontSize: 11, fontWeight: 500,
                   border:     `1px solid ${active ? `${s.color}66` : 'rgba(255,255,255,0.09)'}`,
                   background: active ? `${s.color}22` : 'transparent',
-                  color:      active ? s.color : 'rgba(255,255,255,0.4)',
+                  color:      active ? s.color : 'var(--text-40)',
                   cursor: 'pointer', transition: 'all 0.18s',
                   boxShadow: active ? `0 0 14px ${s.color}33` : 'none',
                 }}
                 onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)' }}}
-                onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)' }}}
+                onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-40)' }}}
                 >{s.label}</button>
               )
             })}
@@ -651,9 +651,9 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
         {anomalies.length === 0 ? (
           <div style={{
             padding: '36px', borderRadius: 14, textAlign: 'center',
-            background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+            background: 'var(--bg-02)', border: '1px solid var(--text-06)',
           }}>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.28)' }}>
+            <div style={{ fontSize: 13, color: 'var(--text-28)' }}>
               No incidents detected. All systems nominal.
             </div>
           </div>
@@ -661,7 +661,7 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {anomalies.slice(0, 4).map(a => <IncidentRow key={a.detected_at + a.endpoint} a={a} />)}
             {anomalies.length > 4 && (
-              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', padding: '8px 0', textAlign: 'center' }}>
+              <p style={{ fontSize: 12, color: 'var(--text-25)', padding: '8px 0', textAlign: 'center' }}>
                 +{anomalies.length - 4} more. View in Incidents.
               </p>
             )}
@@ -678,7 +678,7 @@ function IncidentRow({ a }) {
     <div
       style={{
         display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 11,
-        background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)',
+        background: 'var(--bg-025)', border: '1px solid var(--text-06)',
         transition: 'background 0.15s', cursor: 'default',
         animation: 'fadeUp 0.3s ease',
       }}
@@ -689,9 +689,9 @@ function IncidentRow({ a }) {
       <span style={{ fontSize: 10, fontWeight: 700, color: '#c4b5fd', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)', padding: '2px 9px', borderRadius: 20, flexShrink: 0 }}>
         {label}
       </span>
-      <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'rgba(255,255,255,0.58)', flexShrink: 0 }}>{a.endpoint}</span>
-      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.description}</span>
-      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', flexShrink: 0 }}>{a.detected_at?.slice(11, 19)}</span>
+      <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--text-58)', flexShrink: 0 }}>{a.endpoint}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-38)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.description}</span>
+      <span style={{ fontSize: 11, color: 'var(--text-25)', flexShrink: 0 }}>{a.detected_at?.slice(11, 19)}</span>
     </div>
   )
 }
@@ -699,7 +699,7 @@ function IncidentRow({ a }) {
 function SectionLabel({ children }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.8px', whiteSpace: 'nowrap' }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-28)', textTransform: 'uppercase', letterSpacing: '0.8px', whiteSpace: 'nowrap' }}>
         {children}
       </span>
       <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, rgba(139,92,246,0.2), transparent)' }} />

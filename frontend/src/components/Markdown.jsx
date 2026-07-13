@@ -83,7 +83,7 @@ export default function Markdown({ text, style = {} }) {
 
           // Plain line
           return (
-            <div key={`${si}-${i}`} style={{ color: 'rgba(255,255,255,0.68)', fontSize: 13, marginBottom: 3 }}>
+            <div key={`${si}-${i}`} style={{ color: 'var(--text-55)', fontSize: 13, marginBottom: 3 }}>
               {parseInline(trimmed)}
             </div>
           )

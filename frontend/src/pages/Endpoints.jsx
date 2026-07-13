@@ -54,17 +54,17 @@ export default function Endpoints({ health }) {
 
       {/* Header */}
       <div style={{ marginBottom: 50, textAlign: 'center' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-38)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 14 }}>
           Infrastructure
         </div>
         <h1 style={{
           fontSize: 48, fontWeight: 900, letterSpacing: '-2px', lineHeight: 1.1, marginBottom: 14,
-          background: 'linear-gradient(135deg, #ffffff 20%, #c4b5fd 55%, #67e8f9 100%)',
+          background: 'var(--heading-gradient)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
         }}>
           API Endpoints
         </h1>
-        <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.38)', lineHeight: 1.7 }}>
+        <p style={{ fontSize: 15, color: 'var(--text-38)', lineHeight: 1.7 }}>
           {entries.length} monitored services — sorted by severity
         </p>
       </div>
@@ -81,18 +81,18 @@ export default function Endpoints({ health }) {
           return (
             <div key={s.label} style={{
               padding: '18px 20px', borderRadius: 14,
-              background: s.count > 0 || s.label === 'Avg Uptime' ? ss.bg : 'rgba(255,255,255,0.025)',
-              border: `1px solid ${s.count > 0 ? ss.border : 'rgba(255,255,255,0.06)'}`,
+              background: s.count > 0 || s.label === 'Avg Uptime' ? ss.bg : 'var(--bg-025)',
+              border: `1px solid ${s.count > 0 ? ss.border : 'var(--text-06)'}`,
             }}>
-              <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.32)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-32)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 8 }}>
                 {s.label}
               </div>
               <div style={{
                 fontSize: 28, fontWeight: 800, letterSpacing: '-1px',
-                color: s.count > 0 || s.label === 'Avg Uptime' ? ss.color : 'rgba(255,255,255,0.5)',
+                color: s.count > 0 || s.label === 'Avg Uptime' ? ss.color : 'var(--text-50)',
                 textShadow: s.count > 0 ? `0 0 14px ${ss.dot}44` : 'none',
               }}>{s.count}</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>{s.sub}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-30)', marginTop: 4 }}>{s.sub}</div>
             </div>
           )
         })}
@@ -104,10 +104,10 @@ export default function Endpoints({ health }) {
           ? (
             <div style={{
               textAlign: 'center', padding: 64,
-              background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16,
+              background: 'var(--bg-02)', border: '1px solid var(--text-06)', borderRadius: 16,
             }}>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)' }}>Collecting endpoint data...</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.16)', marginTop: 8 }}>Logs start flowing within a few seconds</div>
+              <div style={{ fontSize: 13, color: 'var(--text-25)' }}>Collecting endpoint data...</div>
+              <div style={{ fontSize: 11, color: 'var(--text-25)', marginTop: 8 }}>Logs start flowing within a few seconds</div>
             </div>
           )
           : entries.map(([ep, stats], i) => (
@@ -205,7 +205,7 @@ function EndpointRow({ endpoint, stats, index, latencyHistory }) {
       style={{
         padding: '20px 22px', borderRadius: 14,
         background: isAlert ? `${ss.bg}` : 'rgba(255,255,255,0.022)',
-        border: `1px solid ${isAlert ? ss.border : 'rgba(255,255,255,0.06)'}`,
+        border: `1px solid ${isAlert ? ss.border : 'var(--text-06)'}`,
         boxShadow: isAlert ? `0 0 20px ${ss.dot}11` : 'none',
         animation: `fadeUp 0.4s ease ${index * 0.04}s both`,
         transition: 'box-shadow 0.4s ease, background 0.4s ease',
@@ -221,8 +221,8 @@ function EndpointRow({ endpoint, stats, index, latencyHistory }) {
 
             <span style={{
               fontSize: 10, fontWeight: 700, letterSpacing: '0.3px',
-              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-              color: 'rgba(255,255,255,0.5)', padding: '1px 8px', borderRadius: 5,
+              background: 'var(--text-06)', border: '1px solid rgba(255,255,255,0.1)',
+              color: 'var(--text-50)', padding: '1px 8px', borderRadius: 5,
             }}>
               {info.method}
             </span>
@@ -271,9 +271,9 @@ function EndpointRow({ endpoint, stats, index, latencyHistory }) {
 
           {/* Latency bar */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'rgba(255,255,255,0.38)', marginBottom: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-38)', marginBottom: 6 }}>
               <span>Response time vs SLA</span>
-              <span style={{ fontWeight: 600, color: slaOk ? 'rgba(255,255,255,0.5)' : '#f87171' }}>
+              <span style={{ fontWeight: 600, color: slaOk ? 'var(--text-50)' : '#f87171' }}>
                 {stats.avg_latency_ms}ms avg
               </span>
             </div>

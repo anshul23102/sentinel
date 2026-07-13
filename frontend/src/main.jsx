@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import './theme.css'
 import App from './App.jsx'
 
 const style = document.createElement('style')
@@ -9,7 +10,6 @@ style.textContent = `
   :root {
     --cx: -600px;
     --cy: -600px;
-    /* Dual-tone palette: Violet primary + Cyan accent */
     --p1: #7c3aed;
     --p1h: #8b5cf6;
     --p2: #a78bfa;
@@ -22,6 +22,128 @@ style.textContent = `
     --p2-rgb: 167,139,250;
     --p3-rgb: 196,181,253;
     --c1-rgb: 6,182,212;
+    --c2-rgb: 34,211,238;
+    --c3-rgb: 103,232,249;
+    --app-bg: #04050d;
+    --app-surface: rgba(7, 8, 12, 0.95);
+    --app-surface-strong: rgba(7, 8, 12, 0.98);
+    --app-text: #f8fafc;
+    --app-muted: rgba(255,255,255,0.62);
+    --app-muted-strong: rgba(255,255,255,0.35);
+    --app-border: rgba(139,92,246,0.12);
+    --app-pill-bg: rgba(139,92,246,0.08);
+    --app-pill-border: rgba(139,92,246,0.16);
+    --app-card-bg: rgba(255,255,255,0.05);
+    --app-card-border: rgba(255,255,255,0.07);
+    --app-nav-text: rgba(255,255,255,0.78);
+    --app-panel-bg: rgba(8, 10, 20, 0.82);
+    --app-panel-border: rgba(255,255,255,0.08);
+    --app-shadow: rgba(0, 0, 0, 0.24);
+    --app-accent: #7c3aed;
+    --app-accent-2: #22d3ee;
+    --app-surface-soft: rgba(255,255,255,0.06);
+    --bg-02: rgba(255,255,255,0.02);
+    --bg-022: rgba(255,255,255,0.022);
+    --bg-025: rgba(255,255,255,0.025);
+    --bg-04: rgba(255,255,255,0.04);
+    --bg-07: rgba(255,255,255,0.07);
+    --text-03: rgba(255,255,255,0.03);
+    --text-04: rgba(255,255,255,0.04);
+    --text-05: rgba(255,255,255,0.05);
+    --text-06: rgba(255,255,255,0.06);
+    --text-07: rgba(255,255,255,0.07);
+    --text-08: rgba(255,255,255,0.08);
+    --text-09: rgba(255,255,255,0.09);
+    --text-10: rgba(255,255,255,0.1);
+    --text-20: rgba(255,255,255,0.2);
+    --text-22: rgba(255,255,255,0.22);
+    --text-25: rgba(255,255,255,0.25);
+    --text-28: rgba(255,255,255,0.28);
+    --text-30: rgba(255,255,255,0.3);
+    --text-32: rgba(255,255,255,0.32);
+    --text-35: rgba(255,255,255,0.35);
+    --text-38: rgba(255,255,255,0.38);
+    --text-40: rgba(255,255,255,0.4);
+    --text-42: rgba(255,255,255,0.42);
+    --text-45: rgba(255,255,255,0.45);
+    --text-50: rgba(255,255,255,0.5);
+    --text-55: rgba(255,255,255,0.55);
+    --text-58 : rgba(255,255,255,0.58);
+    --text-62: rgba(255,255,255,0.62);
+    --text-70: rgba(255,255,255,0.7);
+    --text-85: rgba(255,255,255,0.85);
+    --text-88: rgba(255,255,255,0.88);
+    --bg-03: rgba(255,255,255,0.03);
+    --bg-05: rgba(255,255,255,0.05);
+    --bg-06: rgba(255,255,255,0.06);
+    --bg-08: rgba(255,255,255,0.08);
+    --bg-10: rgba(255,255,255,0.1);
+    --bg-12: rgba(255,255,255,0.12);
+    --bg-15: rgba(255,255,255,0.15);
+    --bg-20: rgba(255,255,255,0.2);
+    --bg-25: rgba(255,255,255,0.25);
+    --heading-gradient: linear-gradient(135deg, #ffffff 20%, #c4b5fd 55%, #67e8f9 100%);
+  }
+
+  :root[data-theme='light'] {
+    --app-bg: linear-gradient(135deg, #f7f9ff 0%, #eef4ff 45%, #fdfbff 100%);
+    --app-surface: rgba(124,58,237,0.12);
+    --app-surface-strong: rgba(124,58,237,0.16);
+    --app-text: #000a1a;
+    --app-muted: rgba(0,10,26,0.72);
+    --app-muted-strong: rgba(0,10,26,0.64);
+    --app-border: rgba(124,58,237,0.24);
+    --app-pill-bg: rgba(124,58,237,0.18);
+    --app-pill-border: rgba(124,58,237,0.3);
+    --app-card-bg: rgba(124,58,237,0.14);
+    --app-card-border: rgba(124,58,237,0.28);
+    --app-nav-text: rgba(0,10,26,0.82);
+    --app-panel-bg: rgba(124,58,237,0.1);
+    --app-panel-border: rgba(124,58,237,0.22);
+    --app-shadow: rgba(0,10,26,0.12);
+    --app-accent: #6d28d9;
+    --app-accent-2: #0f766e;
+    --app-surface-soft: rgba(124,58,237,0.08);
+    --bg-02: rgba(124,58,237,0.06);
+    --bg-022: rgba(124,58,237,0.065);
+    --bg-025: rgba(124,58,237,0.07);
+    --bg-04: rgba(124,58,237,0.09);
+    --bg-07: rgba(124,58,237,0.13);
+    --bg-03: rgba(124,58,237,0.08);
+    --bg-05: rgba(124,58,237,0.1);
+    --bg-06: rgba(124,58,237,0.12);
+    --bg-08: rgba(124,58,237,0.14);
+    --bg-10: rgba(124,58,237,0.16);
+    --bg-12: rgba(124,58,237,0.18);
+    --bg-15: rgba(124,58,237,0.2);
+    --bg-20: rgba(124,58,237,0.24);
+    --bg-25: rgba(124,58,237,0.28);
+    --heading-gradient: #000a1a;
+    --text-03: rgba(0,10,26,0.12);
+    --text-04: rgba(0,10,26,0.14);
+    --text-05: rgba(0,10,26,0.16);
+    --text-06: rgba(0,10,26,0.18);
+    --text-07: rgba(0,10,26,0.2);
+    --text-08: rgba(0,10,26,0.22);
+    --text-09: rgba(0,10,26,0.24);
+    --text-10: rgba(0,10,26,0.26);
+    --text-20: rgba(0,10,26,0.38);
+    --text-22: rgba(0,10,26,0.4);
+    --text-25: rgba(0,10,26,0.44);
+    --text-28: rgba(0,10,26,0.48);
+    --text-30: rgba(0,10,26,0.5);
+    --text-32: rgba(0,10,26,0.52);
+    --text-35: rgba(0,10,26,0.56);
+    --text-38: rgba(0,10,26,0.6);
+    --text-40: rgba(0,10,26,0.62);
+    --text-42: rgba(0,10,26,0.64);
+    --text-45: rgba(0,10,26,0.66);
+    --text-50: rgba(0,10,26,0.72);
+    --text-55: rgba(0,10,26,0.76);
+    --text-62: rgba(0,10,26,0.85);
+    --text-70: rgba(0,10,26,0.92);
+    --text-85: rgba(0,10,26,0.98);
+    --text-88: rgba(0,10,26,1);
   }
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,10 +151,20 @@ style.textContent = `
   html, body, #root {
     height: 100%;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #04050d;
-    color: white;
+    background: var(--app-bg);
+    color: var(--app-text);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+
+  html[data-theme='light'] body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at top left, rgba(124,58,237,0.14), transparent 30%), radial-gradient(circle at bottom right, rgba(6,182,212,0.15), transparent 35%);
+    pointer-events: none;
+    z-index: 0;
   }
 
   /* Cursor glow — dual-tone: violet + faint cyan tail */
@@ -177,22 +309,22 @@ style.textContent = `
     font-family: inherit;
     text-align: left;
     font-size: 13px;
-    font-weight: 400;
-    color: rgba(255,255,255,0.38);
+    font-weight: 500;
+    color: var(--app-muted);
     background: transparent;
     transition: all 0.18s ease;
   }
   .nav-btn:hover {
-    background: rgba(139,92,246,0.08);
-    color: rgba(255,255,255,0.75);
-    border-color: rgba(139,92,246,0.12);
+    background: var(--app-surface-soft);
+    color: var(--app-text);
+    border-color: var(--app-border);
   }
   .nav-btn.active {
-    background: rgba(139,92,246,0.14);
-    color: #c4b5fd;
-    font-weight: 600;
-    border-color: rgba(139,92,246,0.28);
-    box-shadow: inset 3px 0 0 #8b5cf6;
+    background: linear-gradient(90deg, rgba(124,58,237,0.14), rgba(34,211,238,0.1));
+    color: var(--app-accent);
+    font-weight: 700;
+    border-color: rgba(124,58,237,0.22);
+    box-shadow: inset 3px 0 0 var(--app-accent);
   }
 
   button { font-family: inherit; }
