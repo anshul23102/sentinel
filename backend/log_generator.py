@@ -168,8 +168,8 @@ async def run_generator(broadcast_fn, rps: int = 30):
             "endpoint":    l["endpoint"],
             "method":      l["method"],
             "status_code": l["status_code"],
-            "latency_ms":  l["latency_ms"],
-            "error_message": l.get("error_message"),
-        } for l in batch]
+            "latency_ms":  log["latency_ms"],
+            "error_message": log.get("error_message"),
+        } for log in batch]
         await broadcast_fn({"type": "logs", "data": slim})
         await asyncio.sleep(1)
