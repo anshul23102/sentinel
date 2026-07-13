@@ -12,10 +12,10 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs
-from log_generator import run_generator, set_scenario, get_current_scenario, SCENARIOS
-from anomaly_detector import process_log_batch, get_health_snapshot, run_anomaly_scan
-from ai_agent import analyze_anomaly, chat, chat_stream, generate_incident_report
+from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs  # noqa: E402
+from log_generator import run_generator, set_scenario, get_current_scenario, SCENARIOS  # noqa: E402
+from anomaly_detector import process_log_batch, get_health_snapshot, run_anomaly_scan  # noqa: E402
+from ai_agent import analyze_anomaly, chat, chat_stream, generate_incident_report  # noqa: E402
 
 # WebSocket connection manager
 class ConnectionManager:
