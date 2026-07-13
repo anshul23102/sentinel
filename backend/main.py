@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -11,12 +10,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-load_dotenv()
-
 from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs
 from log_generator import run_generator, set_scenario, get_current_scenario, SCENARIOS
 from anomaly_detector import process_log_batch, get_health_snapshot, run_anomaly_scan
 from ai_agent import analyze_anomaly, chat, chat_stream, generate_incident_report
+
+load_dotenv()
 
 # WebSocket connection manager
 class ConnectionManager:
