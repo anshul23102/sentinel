@@ -61,7 +61,7 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
             _error_windows[endpoint].append(log["status_code"])
             _request_windows[endpoint].append(1)
 
-        avg_latency = np.mean([l["latency_ms"] for l in batch])
+        avg_latency = np.mean([log["latency_ms"] for log in batch])
         z           = _z_score(avg_latency, _latency_windows[endpoint])
         err_rate    = _error_rate(_error_windows[endpoint])
 
