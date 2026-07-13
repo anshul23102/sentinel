@@ -106,7 +106,10 @@ export function useWebSocket() {
 
       socket.onopen = () => {
         // Real backend connected — cancel demo fallback and stop mock if running
-        clearTimeout(demoTimer.current)
+        if (demoTimer.current) {
+          clearTimeout(demoTimer.current)
+          demoTimer.current = null
+        }
         stopDemoMode()
         setConnected(true)
         fetchTimeseries()
@@ -116,8 +119,12 @@ export function useWebSocket() {
         setConnected(false)
         if (!isMock.current) {
           // Schedule demo fallback if not already running
-          clearTimeout(demoTimer.current)
-          demoTimer.current = setTimeout(startDemoMode, DEMO_FALLBACK_MS)
+          if (!demoTimer.current) {
+            demoTimer.current = setTimeout(() => {
+              startDemoMode()
+              demoTimer.current = null
+            }, DEMO_FALLBACK_MS)
+          }
           setTimeout(connect, 2000)
         }
       }
@@ -181,14 +188,20 @@ export function useWebSocket() {
     }
 
     // Start connection attempt immediately, demo fallback fires after DEMO_FALLBACK_MS
-    demoTimer.current = setTimeout(startDemoMode, DEMO_FALLBACK_MS)
+    demoTimer.current = setTimeout(() => {
+      startDemoMode()
+      demoTimer.current = null
+    }, DEMO_FALLBACK_MS)
     connect()
 
     const interval = setInterval(fetchTimeseries, 10000)
     return () => {
       ws.current?.close()
       clearInterval(interval)
-      clearTimeout(demoTimer.current)
+      if (demoTimer.current) {
+        clearTimeout(demoTimer.current)
+        demoTimer.current = null
+      }
       clearInterval(demoLoop.current)
     }
   }, [fetchTimeseries, startDemoMode, stopDemoMode])
