@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -12,10 +13,10 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs  # noqa: E402
-from log_generator import run_generator, set_scenario, get_current_scenario, SCENARIOS  # noqa: E402
-from anomaly_detector import process_log_batch, get_health_snapshot, run_anomaly_scan  # noqa: E402
-from ai_agent import analyze_anomaly, chat, chat_stream, generate_incident_report  # noqa: E402
+from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs
+from log_generator import run_generator, set_scenario, get_current_scenario, SCENARIOS
+from anomaly_detector import process_log_batch, get_health_snapshot, run_anomaly_scan
+from ai_agent import analyze_anomaly, chat, chat_stream, generate_incident_report
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -41,6 +42,10 @@ class ConnectionManager:
             self.disconnect(ws)
 
 manager = ConnectionManager()
+# Runtime monitoring state
+pipeline_task = None
+scan_task = None
+last_monitoring_cycle = None
 
 # Background pipeline
 async def log_pipeline():
@@ -78,6 +83,9 @@ async def periodic_scan():
         await asyncio.sleep(5)
         tick += 1
         await run_anomaly_scan(manager.broadcast)
+        global last_monitoring_cycle
+        last_monitoring_cycle = datetime.now(timezone.utc).isoformat()
+
         health = get_health_snapshot()
         await manager.broadcast({"type": "health", "data": health})
         # Prune logs older than 15 minutes every 60s to keep DB lean
@@ -86,6 +94,8 @@ async def periodic_scan():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global pipeline_task, scan_task
+
     await init_db()
 
     pipeline_task = asyncio.create_task(log_pipeline())
@@ -115,7 +125,22 @@ app.add_middleware(
 # REST endpoints
 @app.get("/api/health")
 async def health():
-    return get_health_snapshot()
+    health = dict(get_health_snapshot())
+
+    health["monitoring"] = {
+        "log_pipeline_running": (
+            pipeline_task is not None
+            and not pipeline_task.done()
+        ),
+        "anomaly_detector_running": (
+            scan_task is not None
+            and not scan_task.done()
+        ),
+        "connected_websocket_clients": len(manager.active),
+        "last_monitoring_cycle": last_monitoring_cycle,
+    }
+
+    return health
 
 @app.get("/api/logs")
 async def logs(limit: int = 100, endpoint: Optional[str] = None):
