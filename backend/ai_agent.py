@@ -1,4 +1,4 @@
-from groq import Groq
+from groq import AsyncGroq
 import json
 import os
 from datetime import datetime
@@ -6,7 +6,7 @@ from db import get_recent_logs, get_endpoint_stats, get_recent_anomalies
 from anomaly_detector import get_health_snapshot
 
 _api_key = os.environ.get("GROQ_API_KEY", "")
-client = Groq(api_key=_api_key) if _api_key else None
+client = AsyncGroq(api_key=_api_key) if _api_key else None
 MODEL = "llama-3.3-70b-versatile"
 
 def _get_client():
@@ -14,7 +14,7 @@ def _get_client():
     if client is None:
         _api_key = os.environ.get("GROQ_API_KEY", "")
         if _api_key:
-            client = Groq(api_key=_api_key)
+            client = AsyncGroq(api_key=_api_key)
     return client
 
 BASE_SYSTEM_PROMPT = """You are Sentinel, an expert SRE AI embedded inside a live API monitoring dashboard.
@@ -49,11 +49,11 @@ def _build_system_with_context(health: dict, recent_anomalies: list, stats: list
     )
     return BASE_SYSTEM_PROMPT + context_block
 
-def _generate(prompt: str, max_tokens: int = 600) -> str:
+async def _generate(prompt: str, max_tokens: int = 600) -> str:
     c = _get_client()
     if not c:
         return "AI unavailable: GROQ_API_KEY not configured."
-    response = c.chat.completions.create(
+    response = await c.chat.completions.create(
         model=MODEL,
         messages=[
             {"role": "system", "content": BASE_SYSTEM_PROMPT},
@@ -83,7 +83,7 @@ Log data for {anomaly['endpoint']} (last 60s):
 Give a sharp SRE diagnosis: what is actually happening, why, and the top 3 immediate actions to resolve it.
 Be specific to this anomaly — reference actual numbers from the logs. Under 250 words."""
 
-    analysis = _generate(prompt)
+    analysis = await _generate(prompt)
     return {
         "anomaly_id": anomaly.get("id"),
         "analysis": analysis,
@@ -108,14 +108,14 @@ async def chat_stream(message: str, conversation_history: list[dict]):
     if not c:
         yield "AI unavailable: GROQ_API_KEY not configured."
         return
-    stream = c.chat.completions.create(
+    stream = await c.chat.completions.create(
         model=MODEL,
         messages=messages,
         max_tokens=600,
         temperature=0.55,
         stream=True,
     )
-    for chunk in stream:
+    async for chunk in stream:
         delta = chunk.choices[0].delta.content
         if delta:
             yield delta
@@ -141,7 +141,7 @@ async def chat(message: str, conversation_history: list[dict]) -> str:
     c = _get_client()
     if not c:
         return "AI unavailable: GROQ_API_KEY not configured."
-    response = c.chat.completions.create(
+    response = await c.chat.completions.create(
         model=MODEL,
         messages=messages,
         max_tokens=600,
@@ -175,7 +175,7 @@ Format:
 
 Keep it engineering-focused, under 400 words."""
 
-    return _generate(prompt, max_tokens=800)
+    return await _generate(prompt, max_tokens=800)
 
 def _summarize_logs(logs: list[dict], endpoint: str) -> dict:
     endpoint_logs = [l for l in logs if l["endpoint"] == endpoint]
