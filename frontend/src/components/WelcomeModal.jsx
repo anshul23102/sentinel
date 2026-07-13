@@ -72,9 +72,23 @@ export default function WelcomeModal({ onClose, theme = 'dark' }) {
     return () => cancelAnimationFrame(rafId)
   }, [])
 
+  // Escape key listener to close modal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose])
+
   // Theme-aware tokens — mirrors the palette used across the rest of the app
   const c = {
     overlayBg:      isDark ? 'rgba(0,0,0,0.82)'        : 'rgba(15,15,26,0.42)',
+    cardBg:         isDark ? 'rgba(5, 6, 14, 0.98)'    : '#ffffff',
     cardBorder:     isDark ? 'rgba(255,255,255,0.1)'    : 'rgba(15,10,30,0.1)',
     cardShadow:     isDark
       ? '0 48px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(139,92,246,0.1)'
