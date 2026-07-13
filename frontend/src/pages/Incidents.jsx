@@ -23,7 +23,8 @@ export default function Incidents({ anomalies, aiAnalyses }) {
   const handleExport = async (format) => {
   setShowExportMenu(false)
   try {
-    const res = await fetch(`http://localhost:8000/api/incidents/export?format=${format}`)
+    const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+    const res = await fetch(`${BACKEND}/api/incidents/export?format=${format}`)
     if (!res.ok) throw new Error('Export failed')
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)
