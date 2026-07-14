@@ -13,6 +13,19 @@ Closes #<!-- issue number -->
 - [ ] Documentation update
 - [ ] Refactor / cleanup
 
+## Branch is up to date
+
+Before submitting, confirm your branch is rebased on the latest `main`:
+
+```
+git fetch upstream
+git rebase upstream/main
+```
+
+- [ ] I have rebased on the latest `main` and resolved any conflicts
+
+> PRs with merge conflicts will not be reviewed until the branch is up to date.
+
 ## Testing
 
 <!-- How did you test this? -->
