@@ -1,9 +1,12 @@
 import asyncio
+import csv
+import io
 import json
 import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
+import aiosqlite
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +15,7 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs  # noqa: E402
+from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs, DB_PATH  # noqa: E402
 from log_generator import run_generator, set_scenario, get_current_scenario, SCENARIOS  # noqa: E402
 from anomaly_detector import process_log_batch, get_health_snapshot, run_anomaly_scan  # noqa: E402
 from ai_agent import analyze_anomaly, chat, chat_stream, generate_incident_report  # noqa: E402
@@ -193,6 +196,39 @@ async def incident_report():
         return {"report": "No anomalies detected in the current monitoring window."}
     report = await generate_incident_report(anomalies_data, 10)
     return {"report": report}
+
+@app.get("/api/incidents/export")
+async def export_incidents(format: str = "csv"):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM anomalies ORDER BY detected_at DESC"
+        )
+        rows = await cursor.fetchall()
+
+    incidents = [dict(row) for row in rows]
+
+    if format.lower() == "json":
+        content = json.dumps(incidents, indent=2, default=str)
+        return StreamingResponse(
+            io.StringIO(content),
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=sentinel_incidents.json"},
+        )
+
+    output = io.StringIO()
+    if incidents:
+        writer = csv.DictWriter(output, fieldnames=incidents[0].keys())
+        writer.writeheader()
+        writer.writerows(incidents)
+    else:
+        output.write("No incidents found")
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=sentinel_incidents.csv"},
+    )
 
 # WebSocket
 @app.websocket("/ws")
