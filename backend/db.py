@@ -142,7 +142,7 @@ async def get_endpoint_stats(minutes: int = 5):
                 SUM(CASE WHEN status_code >= 400 AND status_code < 500 THEN 1 ELSE 0 END) as error_4xx,
                 SUM(CASE WHEN status_code < 400 THEN 1 ELSE 0 END) as success_count
             FROM logs
-            WHERE timestamp >= datetime('now', ? || ' minutes')
+            WHERE timestamp >= strftime('%Y-%m-%dT%H:%M:%S', 'now', ? || ' minutes')
             GROUP BY endpoint
             ORDER BY total_requests DESC
         """, (f"-{minutes}",))
@@ -153,7 +153,7 @@ async def prune_old_logs(minutes: int = 15):
     """Keep DB lean — delete logs older than `minutes` to prevent unbounded growth."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "DELETE FROM logs WHERE timestamp < datetime('now', ? || ' minutes')",
+            "DELETE FROM logs WHERE timestamp < strftime('%Y-%m-%dT%H:%M:%S', 'now', ? || ' minutes')",
             (f"-{minutes}",)
         )
         await db.commit()
@@ -168,7 +168,7 @@ async def get_timeseries(minutes: int = 10):
                 COUNT(*) as req_count,
                 SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) as errors
             FROM logs
-            WHERE timestamp >= datetime('now', ? || ' minutes')
+            WHERE timestamp >= strftime('%Y-%m-%dT%H:%M:%S', 'now', ? || ' minutes')
             GROUP BY strftime('%Y-%m-%dT%H:%M:%S', timestamp)
             ORDER BY second ASC
         """, (f"-{minutes}",))
