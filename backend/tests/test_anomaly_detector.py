@@ -206,6 +206,15 @@ class TestErrorSurgeDetection:
         anomalies = process_log_batch(_make_logs("/api/auth", latency_ms=80.0, status_code=429, n=40))
         types = [a["anomaly_type"] for a in anomalies]
         assert "error_surge" in types
+    
+    def test_error_rate_exactly_at_threshold_triggers_surge(self):
+        """Error rate at or above ERROR_RATE_THRESHOLD must trigger error_surge."""
+        n_errors = int(20 * ERROR_RATE_THRESHOLD) + 1
+        logs = _make_logs("/api/orders", latency_ms=80.0, status_code=200, n=20 - n_errors)
+        logs += _make_logs("/api/orders", latency_ms=80.0, status_code=500, n=n_errors)
+        anomalies = process_log_batch(logs)
+        types = [a["anomaly_type"] for a in anomalies]
+        assert "error_surge" in types
 
 
 # ===========================================================================
