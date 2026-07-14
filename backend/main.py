@@ -4,6 +4,7 @@ import io
 import json
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Optional
 
 import aiosqlite
@@ -45,6 +46,11 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# Runtime monitoring state
+pipeline_task = None
+scan_task = None
+last_monitoring_cycle = None
+
 # Background pipeline
 async def log_pipeline():
     """Main pipeline: generate logs → detect anomalies → broadcast."""
@@ -76,11 +82,13 @@ async def _async_ai_analysis(anomaly: dict):
 
 async def periodic_scan():
     """Every 5s: run anomaly scan, broadcast health, and prune old DB rows."""
+    global last_monitoring_cycle
     tick = 0
     while True:
         await asyncio.sleep(5)
         tick += 1
         await run_anomaly_scan(manager.broadcast)
+        last_monitoring_cycle = datetime.now(timezone.utc).isoformat()
         health = get_health_snapshot()
         await manager.broadcast({"type": "health", "data": health})
         # Prune logs older than 15 minutes every 60s to keep DB lean
@@ -89,6 +97,8 @@ async def periodic_scan():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global pipeline_task, scan_task
+
     await init_db()
 
     pipeline_task = asyncio.create_task(log_pipeline())
@@ -118,7 +128,20 @@ app.add_middleware(
 # REST endpoints
 @app.get("/api/health")
 async def health():
-    return get_health_snapshot()
+    health_data = dict(get_health_snapshot())
+    health_data["monitoring"] = {
+        "log_pipeline_running": (
+            pipeline_task is not None
+            and not pipeline_task.done()
+        ),
+        "anomaly_detector_running": (
+            scan_task is not None
+            and not scan_task.done()
+        ),
+        "connected_websocket_clients": len(manager.active),
+        "last_monitoring_cycle": last_monitoring_cycle,
+    }
+    return health_data
 
 @app.get("/api/logs")
 async def logs(limit: int = 100, endpoint: Optional[str] = None):
