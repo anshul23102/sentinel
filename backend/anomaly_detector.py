@@ -56,11 +56,6 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
     new_anomalies = []
 
     for endpoint, batch in endpoint_batches.items():
-        for log in batch:
-            _latency_windows[endpoint].append(log["latency_ms"])
-            _error_windows[endpoint].append(log["status_code"])
-            _request_windows[endpoint].append(1)
-
         avg_latency = np.mean([log["latency_ms"] for log in batch])
         z           = _z_score(avg_latency, _latency_windows[endpoint])
         err_rate    = _error_rate(_error_windows[endpoint])
@@ -114,6 +109,12 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
                 _active_anomalies.pop(f"errors_{endpoint}", None)
 
         new_anomalies.extend(anomalies_for_ep)
+
+        # Update sliding windows after calculations to prevent baseline data pollution
+        for log in batch:
+            _latency_windows[endpoint].append(log["latency_ms"])
+            _error_windows[endpoint].append(log["status_code"])
+            _request_windows[endpoint].append(1)
 
     return new_anomalies
 
