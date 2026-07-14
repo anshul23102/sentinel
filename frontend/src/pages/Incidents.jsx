@@ -18,6 +18,27 @@ const FILTERS = ['all', 'critical', 'cascade_failure', 'latency_spike', 'error_s
 
 export default function Incidents({ anomalies, aiAnalyses }) {
   const [filter, setFilter] = useState('all')
+  const [showExportMenu, setShowExportMenu] = useState(false)
+
+  const handleExport = async (format) => {
+    setShowExportMenu(false)
+    try {
+      const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+      const res = await fetch(`${BACKEND}/api/incidents/export?format=${format}`)
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `sentinel_incidents.${format}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Export failed. Make sure the backend is running.')
+    }
+  }
 
   const filtered = filter === 'all' ? anomalies
     : filter === 'critical' ? anomalies.filter(a => a.severity === 'critical')
@@ -78,9 +99,60 @@ export default function Incidents({ anomalies, aiAnalyses }) {
             </button>
           )
         })}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-20)' }}>
-          {filtered.length} incident{filtered.length !== 1 ? 's' : ''}
-        </span>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
+          <button
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: showExportMenu ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.08)',
+              border: '1px solid rgba(139,92,246,0.35)',
+              color: '#c4b5fd', cursor: 'pointer', transition: 'all 0.18s', letterSpacing: '0.3px',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.2)'}
+            onMouseLeave={e => e.currentTarget.style.background = showExportMenu ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.08)'}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="2.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="2.5"
+              style={{ transform: showExportMenu ? 'rotate(180deg)' : 'none', transition: '0.2s' }}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+
+          {showExportMenu && (
+            <div style={{
+              position: 'absolute', top: '40px', right: 0,
+              background: 'var(--app-bg)', border: '1px solid var(--bg-10)',
+              borderRadius: 8, padding: 8,
+              display: 'flex', flexDirection: 'column', gap: 6, zIndex: 100,
+            }}>
+              <button onClick={() => handleExport('csv')} style={{
+                padding: '6px 14px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)',
+                color: '#c4b5fd', cursor: 'pointer',
+              }}>
+                CSV
+              </button>
+              <button onClick={() => handleExport('json')} style={{
+                padding: '6px 14px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)',
+                color: '#c4b5fd', cursor: 'pointer', width: '100%',
+              }}>
+                JSON
+              </button>
+            </div>
+          )}
+
+          <span style={{ fontSize: 11, color: 'var(--text-20)' }}>
+            {filtered.length} incident{filtered.length !== 1 ? 's' : ''}
+          </span>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
