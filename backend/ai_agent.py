@@ -178,14 +178,14 @@ Keep it engineering-focused, under 400 words."""
     return _generate(prompt, max_tokens=800)
 
 def _summarize_logs(logs: list[dict], endpoint: str) -> dict:
-    endpoint_logs = [l for l in logs if l["endpoint"] == endpoint]
+    endpoint_logs = [entry for entry in logs if entry["endpoint"] == endpoint]
     if not endpoint_logs:
         return {"message": "No logs found for this endpoint"}
 
     total = len(endpoint_logs)
-    errors = [l for l in endpoint_logs if l["status_code"] >= 500]
-    latencies = [l["latency_ms"] for l in endpoint_logs]
-    error_msgs = list({l["error_message"] for l in errors if l.get("error_message")})[:5]
+    errors = [entry for entry in endpoint_logs if entry["status_code"] >= 500]
+    latencies = [entry["latency_ms"] for entry in endpoint_logs]
+    error_msgs = list({entry["error_message"] for entry in errors if entry.get("error_message")})[:5]
 
     return {
         "total_requests": total,
@@ -203,3 +203,4 @@ def _count_by(items: list[dict], key: str) -> dict:
         val = str(item.get(key, "unknown"))
         counts[val] = counts.get(val, 0) + 1
     return dict(sorted(counts.items()))
+
