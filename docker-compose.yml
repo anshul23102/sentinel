@@ -5,7 +5,8 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - ./backend/.env
+      - path: ./backend/.env
+        required: false
     restart: unless-stopped
 
   frontend:
