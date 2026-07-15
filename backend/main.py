@@ -2,7 +2,6 @@ import asyncio
 import csv
 import io
 import json
-import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
