@@ -164,10 +164,10 @@ async def run_generator(broadcast_fn, rps: int = 30):
         await bulk_insert_logs(batch)
         # Slim payload for WS broadcast — strip metadata/user_id (never rendered)
         slim = [{
-            "timestamp":   l["timestamp"],
-            "endpoint":    l["endpoint"],
-            "method":      l["method"],
-            "status_code": l["status_code"],
+            "timestamp":   log["timestamp"],
+            "endpoint":    log["endpoint"],
+            "method":      log["method"],
+            "status_code": log["status_code"],
             "latency_ms":  log["latency_ms"],
             "error_message": log.get("error_message"),
         } for log in batch]
