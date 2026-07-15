@@ -56,7 +56,13 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
     new_anomalies = []
 
     for endpoint, batch in endpoint_batches.items():
+        # FIX 2: Append error and request logs immediately so they are counted in the current check
+        for log in batch:
+            _error_windows[endpoint].append(log["status_code"])
+            _request_windows[endpoint].append(1)
+
         avg_latency = np.mean([log["latency_ms"] for log in batch])
+        # Calculate z-score BEFORE updating latency window to prevent baseline data pollution
         z           = _z_score(avg_latency, _latency_windows[endpoint])
         err_rate    = _error_rate(_error_windows[endpoint])
 
@@ -81,8 +87,8 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
                 }
                 _active_anomalies[key] = anomaly
                 anomalies_for_ep.append(anomaly)
-            elif z < 1.5:
-                _active_anomalies.pop(f"latency_{endpoint}", None)
+        elif z < 1.5:  # FIX 1: Aligned outwardly so it can actually execute and clear old anomalies
+            _active_anomalies.pop(f"latency_{endpoint}", None)
 
         # Error rate surge detection
         if err_rate > ERROR_RATE_THRESHOLD:
@@ -105,12 +111,12 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
                 }
                 _active_anomalies[key] = anomaly
                 anomalies_for_ep.append(anomaly)
-            elif err_rate < 0.05:
-                _active_anomalies.pop(f"errors_{endpoint}", None)
+        elif err_rate < 0.05:  # FIX 1: Aligned outwardly so it can clear resolved error surges
+            _active_anomalies.pop(f"errors_{endpoint}", None)
 
         new_anomalies.extend(anomalies_for_ep)
 
-        # Update sliding windows after calculations to prevent baseline data pollution
+        # Update sliding latency window after calculations to prevent baseline data pollution
         for log in batch:
             _latency_windows[endpoint].append(log["latency_ms"])
             _error_windows[endpoint].append(log["status_code"])

@@ -56,3 +56,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Run Tests
+        run: export PYTHONPATH=$PYTHONPATH:backend && pytest
