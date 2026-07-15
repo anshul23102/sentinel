@@ -23,7 +23,8 @@ def _z_score(value: float, window: deque) -> float:
     arr = np.array(window)
     std = arr.std()
     if std == 0:
-        return 0.0
+        # If baseline has zero variance, any value above the mean is a significant spike
+        return 3.0 if value > arr.mean() else 0.0
     return (value - arr.mean()) / std
 
 def _error_rate(window: deque) -> float:
