@@ -18,6 +18,7 @@ export function useWebSocket() {
   const demoTimer = useRef(null)
   const demoLoop  = useRef(null)
   const isMock    = useRef(false)
+  const isPageVisible = useRef(!document.hidden)
 
   const [connected,       setConnected]       = useState(false)
   const [demoMode,        setDemoMode]        = useState(false)
@@ -44,6 +45,7 @@ export function useWebSocket() {
 
     // Tick every second
     demoLoop.current = setInterval(() => {
+      if (!isPageVisible.current) {return}
       const batch   = generateLogBatch(30)
       const buf     = [...batch, ...logBuffer.current].slice(0, 180)
       logBuffer.current = buf
@@ -84,7 +86,7 @@ export function useWebSocket() {
 
   // ── Real backend fetch ────────────────────────────────────────────────────
   const fetchTimeseries = useCallback(async () => {
-    if (isMock.current) return
+    if (isMock.current || !isPageVisible.current) return
     try {
       const r    = await fetch(`${API_URL}/api/timeseries?minutes=5`)
       const data = await r.json()
@@ -100,6 +102,8 @@ export function useWebSocket() {
 
   // ── WebSocket connection ──────────────────────────────────────────────────
   useEffect(() => {
+    const handleVisibilityChange = () => {isPageVisible.current = !document.hidden}
+
     function connect() {
       const socket = new WebSocket(WS_URL)
       ws.current = socket
@@ -194,8 +198,11 @@ export function useWebSocket() {
     }, DEMO_FALLBACK_MS)
     connect()
 
+    document.addEventListener("visibilitychange",handleVisibilityChange)
+
     const interval = setInterval(fetchTimeseries, 10000)
     return () => {
+      document.removeEventListener("visibilitychange",handleVisibilityChange)
       ws.current?.close()
       clearInterval(interval)
       if (demoTimer.current) {
