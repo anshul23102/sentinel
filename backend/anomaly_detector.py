@@ -120,8 +120,6 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
         # Update sliding latency window after calculations to prevent baseline data pollution
         for log in batch:
             _latency_windows[endpoint].append(log["latency_ms"])
-            _error_windows[endpoint].append(log["status_code"])
-            _request_windows[endpoint].append(1)
 
     return new_anomalies
 
