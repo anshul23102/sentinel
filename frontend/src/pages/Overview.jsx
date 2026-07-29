@@ -56,10 +56,10 @@ function TiltCard({ children, style = {}, warn = false, flash = false }) {
       style={{
         padding: '22px 24px', borderRadius: 16,
         background: warn ? 'var(--app-pill-bg)' : 'var(--bg-03)',
-        border: `1px solid ${warn ? 'rgba(139,92,246,0.28)' : 'rgba(255,255,255,0.07)'}`,
+        border: `1px solid ${warn ? 'rgba(139,92,246,0.28)' : 'var(--text-07)'}`,
         boxShadow: warn
           ? '0 0 28px rgba(139,92,246,0.12), inset 0 1px 0 var(--text-06)'
-          : 'inset 0 1px 0 rgba(255,255,255,0.03)',
+          : 'inset 0 1px 0 var(--text-03)',
         transition: 'background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease',
         animation: flash ? 'kpiFlash 0.45s ease' : 'none',
         ...style,
@@ -116,10 +116,10 @@ function CriticalCard({ critical, health }) {
       style={{
         padding: '22px 24px', borderRadius: 16,
         background: isAlert ? 'rgba(139,92,246,0.13)' : 'var(--bg-03)',
-        border: `1px solid ${isAlert ? 'rgba(139,92,246,0.45)' : 'rgba(255,255,255,0.07)'}`,
+        border: `1px solid ${isAlert ? 'rgba(139,92,246,0.45)' : 'var(--text-07)'}`,
         boxShadow: isAlert
-          ? '0 0 40px rgba(139,92,246,0.22), 0 0 80px rgba(139,92,246,0.1), inset 0 1px 0 rgba(255,255,255,0.1)'
-          : 'inset 0 1px 0 rgba(255,255,255,0.03)',
+          ? '0 0 40px rgba(139,92,246,0.22), 0 0 80px rgba(139,92,246,0.1), inset 0 1px 0 var(--text-10)'
+          : 'inset 0 1px 0 var(--text-03)',
         animation: isAlert ? 'criticalPulse 2s ease-in-out infinite' : 'none',
         transition: 'background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease',
         position: 'relative', overflow: 'hidden',
@@ -198,7 +198,7 @@ function LiveLogStream({ recentLogs }) {
 
   return (
     <div style={{
-      background: 'rgba(0,0,0,0.4)',
+      background: 'var(--app-code-bg)',
       border: '1px solid rgba(139,92,246,0.15)',
       borderRadius: 14, padding: '16px 18px',
     }}>
@@ -219,7 +219,7 @@ function LiveLogStream({ recentLogs }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {logs.length === 0 ? (
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace', padding: '8px 0' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-20)', fontFamily: 'monospace', padding: '8px 0' }}>
             Waiting for logs...
           </div>
         ) : logs.map((log, i) => (
@@ -233,7 +233,7 @@ function LiveLogStream({ recentLogs }) {
               padding: '2px 0',
             }}
           >
-            <span style={{ color: 'rgba(255,255,255,0.2)', flexShrink: 0, minWidth: 46 }}>
+            <span style={{ color: 'var(--text-20)', flexShrink: 0, minWidth: 46 }}>
               {log.timestamp?.slice(11, 19) || '--:--:--'}
             </span>
             <span style={{
@@ -507,7 +507,7 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
         <div style={{
           padding: '20px 22px', borderRadius: 14,
           background: 'var(--bg-03)',
-          border: '1px solid rgba(255,255,255,0.07)',
+          border: '1px solid var(--text-07)',
           display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-30)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 8 }}>
@@ -544,7 +544,7 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
         <div style={{
           padding: '16px 20px', borderRadius: 14,
           background: 'var(--bg-03)',
-          border: '1px solid rgba(255,255,255,0.07)',
+          border: '1px solid var(--text-07)',
           display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -603,13 +603,13 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
               return (
                 <button key={key} onClick={() => { stopDemo(); injectScenario(key) }} style={{
                   padding: '6px 14px', borderRadius: 20, fontSize: 11, fontWeight: 500,
-                  border:     `1px solid ${active ? `${s.color}66` : 'rgba(255,255,255,0.09)'}`,
+                  border:     `1px solid ${active ? `${s.color}66` : 'var(--text-09)'}`,
                   background: active ? `${s.color}22` : 'transparent',
                   color:      active ? s.color : 'var(--text-40)',
                   cursor: 'pointer', transition: 'all 0.18s',
                   boxShadow: active ? `0 0 14px ${s.color}33` : 'none',
                 }}
-                onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.7)' }}}
+                onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'var(--bg-05)'; e.currentTarget.style.color = 'var(--text-70)' }}}
                 onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-40)' }}}
                 >{s.label}</button>
               )
@@ -683,7 +683,7 @@ function IncidentRow({ a }) {
         animation: 'fadeUp 0.3s ease',
       }}
       onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.06)'}
-      onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.025)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-025)'}
     >
       <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#a78bfa', flexShrink: 0, boxShadow: '0 0 6px rgba(167,139,250,0.8)' }} />
       <span style={{ fontSize: 10, fontWeight: 700, color: '#c4b5fd', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)', padding: '2px 9px', borderRadius: 20, flexShrink: 0 }}>

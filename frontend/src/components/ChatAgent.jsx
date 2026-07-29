@@ -41,8 +41,8 @@ export default function ChatAgent({ sendChat, getIncidentReport }) {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100%',
-      background: 'rgba(255,255,255,0.025)',
-      border: '1px solid rgba(255,255,255,0.07)',
+      background: 'var(--bg-025)',
+      border: '1px solid var(--text-07)',
       borderRadius: 20, overflow: 'hidden',
     }}>
       {/* Header */}
@@ -65,12 +65,12 @@ export default function ChatAgent({ sendChat, getIncidentReport }) {
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '-0.2px' }}>Sentinel AI</div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>On-call engineer · live system context</div>
+          <div style={{ fontSize: 11, color: 'var(--text-35)', marginTop: 1 }}>On-call engineer · live system context</div>
         </div>
         <button onClick={() => send('Generate incident report')} style={{
           padding: '6px 14px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-          border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
-          color: 'rgba(255,255,255,0.6)', cursor: 'pointer', transition: 'all 0.2s',
+          border: '1px solid var(--text-10)', background: 'var(--bg-05)',
+          color: 'var(--text-62)', cursor: 'pointer', transition: 'all 0.2s',
         }}>
           📋 Report
         </button>
@@ -89,9 +89,9 @@ export default function ChatAgent({ sendChat, getIncidentReport }) {
           {STARTERS.map(q => (
             <button key={q} onClick={() => send(q)} style={{
               padding: '5px 12px', borderRadius: 20, fontSize: 12,
-              border: '1px solid rgba(255,255,255,0.1)',
-              background: 'rgba(255,255,255,0.04)',
-              color: 'rgba(255,255,255,0.55)', cursor: 'pointer',
+              border: '1px solid var(--text-10)',
+              background: 'var(--bg-04)',
+              color: 'var(--text-55)', cursor: 'pointer',
               transition: 'all 0.15s',
             }}>{q}</button>
           ))}
@@ -102,7 +102,7 @@ export default function ChatAgent({ sendChat, getIncidentReport }) {
       <div style={{
         padding: '12px 16px',
         borderTop: '1px solid var(--text-06)',
-        background: 'rgba(255,255,255,0.02)',
+        background: 'var(--bg-02)',
         display: 'flex', gap: 8,
       }}>
         <input
@@ -112,10 +112,10 @@ export default function ChatAgent({ sendChat, getIncidentReport }) {
           placeholder="Ask about your API health…"
           style={{
             flex: 1,
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: 'var(--bg-05)',
+            border: '1px solid var(--text-10)',
             borderRadius: 12, padding: '10px 14px',
-            fontSize: 13, color: 'white',
+            fontSize: 13, color: 'var(--app-text)',
             outline: 'none', transition: 'border 0.2s',
           }}
         />
@@ -130,7 +130,7 @@ export default function ChatAgent({ sendChat, getIncidentReport }) {
           transition: 'all 0.2s',
         }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke={loading || !input.trim() ? 'rgba(255,255,255,0.25)' : 'white'} strokeWidth="2.5">
+            stroke={loading || !input.trim() ? 'var(--text-25)' : 'white'} strokeWidth="2.5">
             <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
           </svg>
         </button>
@@ -159,10 +159,10 @@ function Bubble({ m }) {
         background: isUser
           ? 'linear-gradient(135deg, #2563eb, #1d4ed8)'
           : 'var(--text-06)',
-        border: isUser ? 'none' : '1px solid rgba(255,255,255,0.08)',
+        border: isUser ? 'none' : '1px solid var(--text-08)',
         borderRadius: isUser ? '16px 16px 4px 16px' : '4px 16px 16px 16px',
         padding: '10px 14px',
-        fontSize: 13, color: isUser ? 'white' : 'rgba(255,255,255,0.8)',
+        fontSize: 13, color: isUser ? 'white' : 'var(--text-80)',
         lineHeight: 1.6, whiteSpace: 'pre-wrap',
         boxShadow: isUser ? '0 4px 16px rgba(37,99,235,0.3)' : 'none',
       }}>
@@ -188,13 +188,13 @@ function ThinkingBubble() {
         </svg>
       </div>
       <div style={{
-        background: 'var(--text-06)', border: '1px solid rgba(255,255,255,0.08)',
+        background: 'var(--text-06)', border: '1px solid var(--text-08)',
         borderRadius: '4px 16px 16px 16px', padding: '12px 16px',
         display: 'flex', gap: 5, alignItems: 'center',
       }}>
         {[0, 0.18, 0.36].map((d, i) => (
           <div key={i} style={{
-            width: 6, height: 6, borderRadius: '50%', background: 'rgba(255,255,255,0.3)',
+            width: 6, height: 6, borderRadius: '50%', background: 'var(--text-30)',
             animation: `bounce 0.9s ${d}s infinite ease-in-out`,
           }} />
         ))}

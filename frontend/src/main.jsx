@@ -83,6 +83,15 @@ style.textContent = `
     --bg-20: rgba(255,255,255,0.2);
     --bg-25: rgba(255,255,255,0.25);
     --heading-gradient: linear-gradient(135deg, #ffffff 20%, #c4b5fd 55%, #67e8f9 100%);
+    --text-15: rgba(255,255,255,0.15);
+    --text-72: rgba(255,255,255,0.72);
+    --text-75: rgba(255,255,255,0.75);
+    --text-80: rgba(255,255,255,0.8);
+    --text-92: rgba(255,255,255,0.92);
+    --app-tooltip-bg: rgba(7,8,12,0.97);
+    --app-overlay-bg: rgba(0,0,0,0.3);
+    --app-code-bg: rgba(0,0,0,0.4);
+    --app-code-text: #e2e8f0;
   }
 
   :root[data-theme='light'] {
@@ -119,6 +128,15 @@ style.textContent = `
     --bg-20: rgba(124,58,237,0.24);
     --bg-25: rgba(124,58,237,0.28);
     --heading-gradient: #000a1a;
+    --text-15: rgba(0,10,26,0.3);
+    --text-72: rgba(0,10,26,0.88);
+    --text-75: rgba(0,10,26,0.9);
+    --text-80: rgba(0,10,26,0.92);
+    --text-92: rgba(0,10,26,0.98);
+    --app-tooltip-bg: rgba(255,255,255,0.97);
+    --app-overlay-bg: rgba(124,58,237,0.08);
+    --app-code-bg: rgba(124,58,237,0.06);
+    --app-code-text: #1e293b;
     --text-03: rgba(0,10,26,0.12);
     --text-04: rgba(0,10,26,0.14);
     --text-05: rgba(0,10,26,0.16);

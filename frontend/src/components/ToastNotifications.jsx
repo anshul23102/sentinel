@@ -48,10 +48,10 @@ export default function ToastNotifications({ anomalies }) {
             key={t._tid}
             style={{
               width: 340, borderRadius: 14,
-              background: 'rgba(7,8,12,0.97)',
+              background: 'var(--app-tooltip-bg)',
               border: `1px solid ${cfg.border}`,
               backdropFilter: 'blur(24px)',
-              boxShadow: `0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px ${cfg.border}`,
+              boxShadow: `0 8px 40px var(--app-shadow), 0 0 0 1px ${cfg.border}`,
               overflow: 'hidden',
               animation: 'toastSlide 0.35s cubic-bezier(0.22,1,0.36,1)',
             }}
@@ -81,7 +81,7 @@ export default function ToastNotifications({ anomalies }) {
                       {cfg.label} Detected
                     </span>
                     <span style={{
-                      fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.4)',
+                      fontSize: 9, fontWeight: 700, color: 'var(--text-40)',
                       background: 'var(--text-06)', padding: '1px 7px', borderRadius: 20,
                       textTransform: 'uppercase', letterSpacing: '0.4px',
                     }}>
@@ -90,7 +90,7 @@ export default function ToastNotifications({ anomalies }) {
                   </div>
 
                   <div style={{
-                    fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.85)',
+                    fontSize: 12, fontWeight: 600, color: 'var(--text-85)',
                     fontFamily: "'JetBrains Mono', monospace", marginBottom: 4,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
@@ -98,7 +98,7 @@ export default function ToastNotifications({ anomalies }) {
                   </div>
 
                   <div style={{
-                    fontSize: 11, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5,
+                    fontSize: 11, color: 'var(--text-45)', lineHeight: 1.5,
                     overflow: 'hidden', display: '-webkit-box',
                     WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                   }}>
@@ -111,11 +111,11 @@ export default function ToastNotifications({ anomalies }) {
                   onClick={() => dismiss(t._tid)}
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'rgba(255,255,255,0.25)', fontSize: 15, padding: '2px 4px',
+                    color: 'var(--text-25)', fontSize: 15, padding: '2px 4px',
                     flexShrink: 0, lineHeight: 1, transition: 'color 0.15s',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.6)'}
-                  onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--text-62)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-25)'}
                 >
                   ✕
                 </button>

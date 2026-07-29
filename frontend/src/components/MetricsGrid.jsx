@@ -40,8 +40,8 @@ function KPICard({ label, value, unit, color, icon, warn }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: 'rgba(255,255,255,0.03)',
-        border: `1px solid ${warn ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.07)'}`,
+        background: 'var(--bg-03)',
+        border: `1px solid ${warn ? 'rgba(239,68,68,0.3)' : 'var(--text-07)'}`,
         borderRadius: 16, padding: '18px 20px',
         transition: 'all 0.25s',
         transform: hovered ? 'translateY(-2px)' : 'none',
@@ -50,11 +50,11 @@ function KPICard({ label, value, unit, color, icon, warn }) {
       }}
     >
       <div style={{ fontSize: 20, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-1px', color: warn ? '#ef4444' : 'white' }}>
+      <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-1px', color: warn ? '#ef4444' : 'var(--app-text)' }}>
         {value}
-        {unit && <span style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.35)', marginLeft: 4 }}>{unit}</span>}
+        {unit && <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-35)', marginLeft: 4 }}>{unit}</span>}
       </div>
-      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>{label}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-40)', marginTop: 4 }}>{label}</div>
     </div>
   )
 }
@@ -85,11 +85,11 @@ function EndpointCard({ endpoint, stats }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={handleMouseLeave}
       style={{
-        background: 'rgba(255,255,255,0.03)',
-        border: `1px solid ${hovered ? s.color + '40' : 'rgba(255,255,255,0.07)'}`,
+        background: 'var(--bg-03)',
+        border: `1px solid ${hovered ? s.color + '40' : 'var(--text-07)'}`,
         borderRadius: 14, padding: '14px 16px',
         transition: 'border 0.2s, box-shadow 0.2s',
-        boxShadow: hovered ? `0 8px 32px ${s.glow}, inset 0 1px 0 rgba(255,255,255,0.05)` : 'none',
+        boxShadow: hovered ? `0 8px 32px ${s.glow}, inset 0 1px 0 var(--bg-05)` : 'none',
         cursor: 'default', position: 'relative', overflow: 'hidden',
         transformStyle: 'preserve-3d',
       }}
@@ -102,7 +102,7 @@ function EndpointCard({ endpoint, stats }) {
       }} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.85)', fontFamily: 'SF Mono, monospace' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-85)', fontFamily: 'SF Mono, monospace' }}>
           /{short}
         </span>
         <span style={{
@@ -122,8 +122,8 @@ function EndpointCard({ endpoint, stats }) {
           { label: 'n', val: stats.sample_size, warn: false },
         ].map(m => (
           <div key={m.label}>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginBottom: 2 }}>{m.label}</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: m.warn ? '#ef4444' : 'rgba(255,255,255,0.75)' }}>{m.val}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-30)', marginBottom: 2 }}>{m.label}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: m.warn ? '#ef4444' : 'var(--text-75)' }}>{m.val}</div>
           </div>
         ))}
       </div>
@@ -135,7 +135,7 @@ function Placeholder() {
   return (
     <div style={{
       gridColumn: '1/-1', padding: 32, textAlign: 'center',
-      color: 'rgba(255,255,255,0.2)', fontSize: 13,
+      color: 'var(--text-20)', fontSize: 13,
     }}>
       Collecting data…
     </div>

@@ -132,7 +132,7 @@ export default function Assistant({ getIncidentReport, anomalies }) {
       {/* Header */}
       <div style={{
         padding: '40px 60px 22px',
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        borderBottom: '1px solid var(--text-07)',
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: msgs.length <= 1 ? 22 : 0 }}>
@@ -187,7 +187,7 @@ export default function Assistant({ getIncidentReport, anomalies }) {
       {/* Input */}
       <div style={{
         padding: '14px 60px 32px',
-        borderTop: '1px solid rgba(255,255,255,0.07)',
+        borderTop: '1px solid var(--text-07)',
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', gap: 10, maxWidth: 820 }}>
@@ -200,14 +200,14 @@ export default function Assistant({ getIncidentReport, anomalies }) {
             style={{
               flex: 1,
               background: 'var(--app-card-bg)',
-              border: '1px solid rgba(255,255,255,0.11)',
+              border: '1px solid var(--text-10)',
               borderRadius: 12, padding: '14px 18px',
-              fontSize: 14, color: 'white', outline: 'none',
+              fontSize: 14, color: 'var(--app-text)', outline: 'none',
               transition: 'border-color 0.18s',
               opacity: streaming ? 0.5 : 1,
             }}
             onFocus={e => e.target.style.borderColor = 'rgba(167,139,250,0.45)'}
-            onBlur={e  => e.target.style.borderColor = 'rgba(255,255,255,0.11)'}
+            onBlur={e  => e.target.style.borderColor = 'var(--text-10)'}
           />
           {streaming ? (
             <button
@@ -229,7 +229,7 @@ export default function Assistant({ getIncidentReport, anomalies }) {
                 background: loading || !input.trim()
                   ? 'var(--text-06)'
                   : 'linear-gradient(135deg, #8b5cf6, #a78bfa)',
-                color: loading || !input.trim() ? 'rgba(255,255,255,0.25)' : 'white',
+                color: loading || !input.trim() ? 'var(--text-25)' : 'white',
                 fontSize: 13, fontWeight: 600,
                 cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
                 transition: 'all 0.16s',
@@ -238,7 +238,7 @@ export default function Assistant({ getIncidentReport, anomalies }) {
             >Send</button>
           )}
         </div>
-        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', marginTop: 10 }}>
+        <p style={{ fontSize: 11, color: 'var(--text-28)', marginTop: 10 }}>
           Powered by Llama 3.3 70B via Groq · Press Enter to send
         </p>
       </div>

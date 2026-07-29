@@ -128,7 +128,7 @@ export default function Endpoints({ health }) {
 function LatencySparkline({ data, status }) {
   if (data.length < 2) return (
     <div style={{ width: 140, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>building…</span>
+      <span style={{ fontSize: 10, color: 'var(--text-20)' }}>building…</span>
     </div>
   )
 
@@ -160,7 +160,7 @@ function LatencySparkline({ data, status }) {
               borderRadius: 6,
               fontSize: 11,
               padding: '3px 8px',
-              color: 'rgba(255,255,255,0.8)',
+              color: 'var(--text-80)',
             }}
             formatter={(v) => [`${v}ms`, 'latency']}
             labelFormatter={() => ''}
@@ -204,7 +204,7 @@ function EndpointRow({ endpoint, stats, index, latencyHistory }) {
       onMouseLeave={onLeave}
       style={{
         padding: '20px 22px', borderRadius: 14,
-        background: isAlert ? `${ss.bg}` : 'rgba(255,255,255,0.022)',
+        background: isAlert ? `${ss.bg}` : 'var(--bg-022)',
         border: `1px solid ${isAlert ? ss.border : 'var(--text-06)'}`,
         boxShadow: isAlert ? `0 0 20px ${ss.dot}11` : 'none',
         animation: `fadeUp 0.4s ease ${index * 0.04}s both`,
@@ -221,13 +221,13 @@ function EndpointRow({ endpoint, stats, index, latencyHistory }) {
 
             <span style={{
               fontSize: 10, fontWeight: 700, letterSpacing: '0.3px',
-              background: 'var(--text-06)', border: '1px solid rgba(255,255,255,0.1)',
+              background: 'var(--text-06)', border: '1px solid var(--text-10)',
               color: 'var(--text-50)', padding: '1px 8px', borderRadius: 5,
             }}>
               {info.method}
             </span>
 
-            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: 'rgba(255,255,255,0.92)' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: 'var(--text-92)' }}>
               {endpoint}
             </span>
 
@@ -249,11 +249,11 @@ function EndpointRow({ endpoint, stats, index, latencyHistory }) {
           </div>
 
           {/* Meta row */}
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.42)', marginBottom: 14, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-42)', marginBottom: 14, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <span>{info.desc}</span>
-            <span style={{ color: 'rgba(255,255,255,0.15)' }}>·</span>
+            <span style={{ color: 'var(--text-15)' }}>·</span>
             <span style={{ color: '#c4b5fd', fontWeight: 500 }}>{info.team}</span>
-            <span style={{ color: 'rgba(255,255,255,0.15)' }}>·</span>
+            <span style={{ color: 'var(--text-15)' }}>·</span>
             <span>
               SLA <span style={{ fontWeight: 700, color: slaOk ? '#34d399' : '#f87171' }}>{info.sla}ms</span>
             </span>
@@ -277,10 +277,10 @@ function EndpointRow({ endpoint, stats, index, latencyHistory }) {
                 {stats.avg_latency_ms}ms avg
               </span>
             </div>
-            <div style={{ height: 5, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+            <div style={{ height: 5, background: 'var(--bg-05)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
               <div style={{
                 position: 'absolute', left: `${Math.min(100, (info.sla / (info.sla * 3)) * 100)}%`,
-                top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.2)', zIndex: 1,
+                top: 0, bottom: 0, width: 1, background: 'var(--text-20)', zIndex: 1,
               }} />
               <div style={{
                 height: '100%', borderRadius: 4, width: `${latPct}%`,
@@ -289,9 +289,9 @@ function EndpointRow({ endpoint, stats, index, latencyHistory }) {
                 boxShadow: latPct > 50 ? `0 0 8px ${latPct > 80 ? '#f8717166' : '#fbbf2466'}` : 'none',
               }} />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'rgba(255,255,255,0.2)', marginTop: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-20)', marginTop: 4 }}>
               <span>0ms</span>
-              <span style={{ color: 'rgba(255,255,255,0.28)' }}>SLA {info.sla}ms</span>
+              <span style={{ color: 'var(--text-28)' }}>SLA {info.sla}ms</span>
               <span>{info.sla * 3}ms</span>
             </div>
           </div>
@@ -302,12 +302,12 @@ function EndpointRow({ endpoint, stats, index, latencyHistory }) {
 
           {/* Sparkline */}
           <div style={{
-            background: 'rgba(255,255,255,0.025)',
-            border: `1px solid ${isAlert ? ss.border : 'rgba(255,255,255,0.06)'}`,
+            background: 'var(--bg-025)',
+            border: `1px solid ${isAlert ? ss.border : 'var(--text-06)'}`,
             borderRadius: 10,
             padding: '6px 8px 2px',
           }}>
-            <div style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
+            <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-28)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>
               Latency trend
             </div>
             <LatencySparkline data={latencyHistory} status={stats.status} />
@@ -322,12 +322,12 @@ function EndpointRow({ endpoint, stats, index, latencyHistory }) {
               { label: 'Uptime',      val: `${uptime}%`, warn: uptime < 95, warnColor: uptime < 90 ? '#f87171' : '#fbbf24' },
             ].map(m => (
               <div key={m.label} style={{
-                background: m.warn ? `rgba(${m.warnColor === '#f87171' ? '248,113,113' : '251,191,36'},0.08)` : 'rgba(255,255,255,0.025)',
-                border: `1px solid ${m.warn ? (m.warnColor === '#f87171' ? 'rgba(248,113,113,0.2)' : 'rgba(251,191,36,0.18)') : 'rgba(255,255,255,0.06)'}`,
+                background: m.warn ? `rgba(${m.warnColor === '#f87171' ? '248,113,113' : '251,191,36'},0.08)` : 'var(--bg-025)',
+                border: `1px solid ${m.warn ? (m.warnColor === '#f87171' ? 'rgba(248,113,113,0.2)' : 'rgba(251,191,36,0.18)') : 'var(--text-06)'}`,
                 borderRadius: 10, padding: '10px 12px',
               }}>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.42)', marginBottom: 5, fontWeight: 500 }}>{m.label}</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: m.warn ? m.warnColor : 'rgba(255,255,255,0.78)' }}>{m.val}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-42)', marginBottom: 5, fontWeight: 500 }}>{m.label}</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: m.warn ? m.warnColor : 'var(--text-75)' }}>{m.val}</div>
               </div>
             ))}
           </div>

@@ -91,7 +91,7 @@ export default function Incidents({ anomalies, aiAnalyses }) {
               {count > 0 && (
                 <span style={{
                   fontSize: 9, fontWeight: 700, minWidth: 16, height: 16, borderRadius: 8,
-                  background: active ? 'rgba(196,181,253,0.25)' : 'rgba(255,255,255,0.1)',
+                  background: active ? 'rgba(196,181,253,0.25)' : 'var(--text-10)',
                   color: active ? '#ddd6fe' : 'var(--text-50)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
                 }}>{count}</span>
@@ -197,9 +197,9 @@ function CopyButton({ text }) {
   return (
     <button onClick={copy} style={{
       padding: '3px 10px', borderRadius: 8, fontSize: 10, fontWeight: 600,
-      border: `1px solid ${copied ? 'rgba(52,211,153,0.35)' : 'rgba(255,255,255,0.1)'}`,
-      background: copied ? 'rgba(52,211,153,0.1)' : 'rgba(255,255,255,0.04)',
-      color: copied ? '#6ee7b7' : 'rgba(255,255,255,0.4)',
+      border: `1px solid ${copied ? 'rgba(52,211,153,0.35)' : 'var(--text-10)'}`,
+      background: copied ? 'rgba(52,211,153,0.1)' : 'var(--bg-04)',
+      color: copied ? '#6ee7b7' : 'var(--text-40)',
       cursor: 'pointer', transition: 'all 0.18s', flexShrink: 0,
     }}>
       {copied ? 'Copied!' : 'Copy'}
@@ -215,8 +215,8 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
   return (
     <div style={{
       background: open ? `${sevStyle.bg}` : 'var(--bg-025)',
-      border: `1px solid ${open ? sevStyle.border : 'rgba(255,255,255,0.08)'}`,
-      borderLeft: `3px solid ${open ? sevStyle.dot : 'rgba(255,255,255,0.1)'}`,
+      border: `1px solid ${open ? sevStyle.border : 'var(--text-08)'}`,
+      borderLeft: `3px solid ${open ? sevStyle.dot : 'var(--text-10)'}`,
       borderRadius: 14, overflow: 'hidden',
       transition: 'all 0.22s ease',
       animation: `fadeUp 0.38s ease ${index * 0.04}s both`,
@@ -251,7 +251,7 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
         {/* Endpoint */}
         <span style={{
           fontSize: 12, fontFamily: "'JetBrains Mono', monospace",
-          color: 'rgba(255,255,255,0.7)', flexShrink: 0,
+          color: 'var(--text-70)', flexShrink: 0,
           cursor: 'text',
         }}
           onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(anomaly.endpoint) }}
@@ -261,17 +261,17 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
         </span>
 
         {/* Description */}
-        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 12, color: 'var(--text-40)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {anomaly.description}
         </span>
 
         {/* Time */}
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', flexShrink: 0, fontFamily: 'monospace' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-25)', flexShrink: 0, fontFamily: 'monospace' }}>
           {anomaly.detected_at?.slice(11, 19)}
         </span>
 
         {/* Chevron */}
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2"
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-30)" strokeWidth="2"
           style={{ transform: open ? 'rotate(180deg)' : 'none', transition: '0.22s', flexShrink: 0 }}>
           <polyline points="6 9 12 15 18 9" />
         </svg>
@@ -284,7 +284,7 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
           {/* Root cause chain */}
           {anomaly.root_cause_chain?.length > 0 && (
             <div style={{ marginBottom: 20 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.9px', marginBottom: 12 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-30)', textTransform: 'uppercase', letterSpacing: '0.9px', marginBottom: 12 }}>
                 Root Cause Chain
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -294,12 +294,12 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{
-                        background: 'rgba(255,255,255,0.04)',
-                        border: '1px solid rgba(255,255,255,0.1)',
+                        background: 'var(--bg-04)',
+                        border: '1px solid var(--text-10)',
                         borderRadius: 10, padding: '10px 14px',
                       }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.88)', marginBottom: 3 }}>{step.component}</div>
-                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 6 }}>{step.signal}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-88)', marginBottom: 3 }}>{step.component}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-45)', marginBottom: 6 }}>{step.signal}</div>
                         <div style={{
                           fontSize: 10, color: confColor, fontWeight: 700,
                           background: `${confColor}18`, border: `1px solid ${confColor}33`,
@@ -307,7 +307,7 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
                         }}>{conf}% confidence</div>
                       </div>
                       {i < anomaly.root_cause_chain.length - 1 && (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-20)" strokeWidth="2">
                           <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
                         </svg>
                       )}
@@ -336,8 +336,8 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                   </svg>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>AI Diagnosis</span>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', marginRight: 'auto' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-85)' }}>AI Diagnosis</span>
+                <span style={{ fontSize: 10, color: 'var(--text-28)', marginRight: 'auto' }}>
                   {analysis.analyzed_at?.slice(11, 19)} · {analysis.model?.split('-')[0]}
                 </span>
                 <CopyButton text={analysis.analysis} />
@@ -348,8 +348,8 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '13px 16px', borderRadius: 12,
-              background: 'var(--bg-025)', border: '1px solid rgba(255,255,255,0.08)',
-              fontSize: 13, color: 'rgba(255,255,255,0.4)',
+              background: 'var(--bg-025)', border: '1px solid var(--text-08)',
+              fontSize: 13, color: 'var(--text-40)',
             }}>
               <div style={{
                 width: 14, height: 14, borderRadius: '50%',

@@ -157,8 +157,8 @@ export default function App() {
       <div style={{
         position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
         backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.014) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.014) 1px, transparent 1px)
+          linear-gradient(var(--text-03) 1px, transparent 1px),
+          linear-gradient(90deg, var(--text-03) 1px, transparent 1px)
         `,
         backgroundSize: '52px 52px',
       }} />

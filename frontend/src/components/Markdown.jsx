@@ -12,11 +12,11 @@ export default function Markdown({ text, style = {} }) {
         if (seg.type === 'code') {
           return (
             <pre key={si} style={{
-              background: 'rgba(0,0,0,0.4)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'var(--app-code-bg)',
+              border: '1px solid var(--text-10)',
               borderRadius: 8, padding: '10px 14px',
               fontSize: 12, fontFamily: "'JetBrains Mono', monospace",
-              color: '#e2e8f0', overflowX: 'auto', margin: '8px 0',
+              color: 'var(--app-code-text)', overflowX: 'auto', margin: '8px 0',
               lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
             }}>
               {seg.lang && (
@@ -62,7 +62,7 @@ export default function Markdown({ text, style = {} }) {
                   color: '#a78bfa', flexShrink: 0, fontSize: 11, fontWeight: 700,
                   minWidth: 18, marginTop: 1,
                 }}>{numberedMatch[1]}.</span>
-                <span style={{ color: 'rgba(255,255,255,0.72)', fontSize: 13 }}>
+                <span style={{ color: 'var(--text-72)', fontSize: 13 }}>
                   {parseInline(numberedMatch[2])}
                 </span>
               </div>
@@ -74,7 +74,7 @@ export default function Markdown({ text, style = {} }) {
             return (
               <div key={`${si}-${i}`} style={{ display: 'flex', gap: 9, marginBottom: 5, alignItems: 'flex-start' }}>
                 <span style={{ color: '#a78bfa', flexShrink: 0, marginTop: 1, fontSize: 12 }}>›</span>
-                <span style={{ color: 'rgba(255,255,255,0.72)', fontSize: 13 }}>
+                <span style={{ color: 'var(--text-72)', fontSize: 13 }}>
                   {parseInline(trimmed.slice(2))}
                 </span>
               </div>
@@ -123,7 +123,7 @@ function parseInline(text) {
     if (match[1] !== undefined) {
       // **bold**
       parts.push(
-        <strong key={key++} style={{ color: 'rgba(255,255,255,0.92)', fontWeight: 700 }}>
+        <strong key={key++} style={{ color: 'var(--text-92)', fontWeight: 700 }}>
           {match[1]}
         </strong>
       )
