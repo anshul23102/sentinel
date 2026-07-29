@@ -264,3 +264,41 @@ class TestHealthSnapshot:
         process_log_batch(_make_logs("/api/products", latency_ms=80.0, status_code=500, n=10))
         snapshot = get_health_snapshot()
         assert snapshot["/api/products"]["uptime_pct"] < 100.0
+
+
+# ===========================================================================
+# regression_test
+# ===========================================================================
+
+class TestSlidingWindowUpdates:
+
+    def test_error_and_request_windows_updated_once_per_log(self):
+        logs = [
+            {
+                "endpoint": "/api/test",
+                "latency_ms": 100,
+                "status_code": 200,
+            },
+            {
+                "endpoint": "/api/test",
+                "latency_ms": 120,
+                "status_code": 500,
+            },
+            {
+                "endpoint": "/api/test",
+                "latency_ms": 140,
+                "status_code": 404,
+            },
+        ]
+
+        process_log_batch(logs)
+
+        assert len(_latency_windows["/api/test"]) == 3
+        assert len(_error_windows["/api/test"]) == 3
+        assert len(_request_windows["/api/test"]) == 3
+
+        process_log_batch(logs)
+
+        assert len(_latency_windows["/api/test"]) == 6
+        assert len(_error_windows["/api/test"]) == 6
+        assert len(_request_windows["/api/test"]) == 6
