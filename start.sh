@@ -20,7 +20,7 @@ echo "   Frontend: http://localhost:5173"
 echo "   Backend:  http://localhost:8000"
 echo "   API Docs: http://localhost:8000/docs"
 echo ""
-echo "⚠️  Add your ANTHROPIC_API_KEY to backend/.env to enable AI analysis"
+echo "⚠️  Add your GROQ_API_KEY to backend/.env to enable AI analysis"
 echo ""
 echo "Press Ctrl+C to stop both servers"
 
