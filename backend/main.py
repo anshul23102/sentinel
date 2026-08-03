@@ -266,7 +266,9 @@ async def websocket_endpoint(ws: WebSocket):
         while True:
             try:
                 await ws.receive_text()  # keep-alive / ping
+            except WebSocketDisconnect:
+                raise  # let the outer handler clean up
             except Exception:
-                pass  # ignore malformed frames — only WebSocketDisconnect exits the loop
+                pass  # ignore malformed frames
     except WebSocketDisconnect:
         manager.disconnect(ws)
