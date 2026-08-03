@@ -244,8 +244,8 @@ export function useWebSocket() {
         normal:        'All systems are healthy. Latency is nominal at ~80ms, error rate below 1%. No active incidents.',
         db_slowdown:   'Root cause: database connection pool exhausted. Auth service is queuing 28 connections against a pool of 10. Cascade path: Auth (500ms) → Cart (timeouts) → Checkout (503s). Recommend: increase pool size and add circuit breaker.',
         memory_leak:   'Memory leak detected on search service. Heap growing ~12MB/min. GC pauses causing latency spikes. Restart the service immediately and cap the in-memory product cache.',
-        rate_limit:    'Rate limit cascade: auth returning 429s from a traffic spike. All login-dependent services are stalled. Block the source subnet in WAF and temporarily raise rate limit for internal services.',
-        net_partition: 'Network partition in us-east-1b AZ. Inventory is unreachable causing 65% cart failures. Reroute traffic to us-east-1a replica and enable stale-read fallback.',
+        rate_limit_cascade:    'Rate limit cascade: auth returning 429s from a traffic spike. All login-dependent services are stalled. Block the source subnet in WAF and temporarily raise rate limit for internal services.',
+        network_partition: 'Network partition in us-east-1b AZ. Inventory is unreachable causing 65% cart failures. Reroute traffic to us-east-1a replica and enable stale-read fallback.',
       }
       return { response: responses[scenario] || responses.normal }
     }
