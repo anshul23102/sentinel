@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs, DB_PATH  # noqa: E402
+from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs, prune_old_anomalies, DB_PATH  # noqa: E402
 from log_generator import run_generator, set_scenario, get_current_scenario, SCENARIOS  # noqa: E402
 from anomaly_detector import process_log_batch, get_health_snapshot, run_anomaly_scan  # noqa: E402
 from ai_agent import analyze_anomaly, chat, chat_stream, generate_incident_report  # noqa: E402
@@ -90,9 +90,11 @@ async def periodic_scan():
         last_monitoring_cycle = datetime.now(timezone.utc).isoformat()
         health = get_health_snapshot()
         await manager.broadcast({"type": "health", "data": health})
-        # Prune logs older than 15 minutes every 60s to keep DB lean
+        # Prune old rows every 60s to keep DB lean: logs (15 min) and the
+        # anomalies table (24h) which previously grew without bound.
         if tick % 12 == 0:
             await prune_old_logs(minutes=15)
+            await prune_old_anomalies(minutes=1440)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -220,11 +222,16 @@ async def incident_report():
     return {"report": report}
 
 @app.get("/api/incidents/export")
-async def export_incidents(format: str = "csv"):
+async def export_incidents(format: str = "csv", limit: int = 1000):
+    # Bound the export so it can't materialize the whole (now also pruned)
+    # anomalies table into memory. id is a stable tiebreaker for rows that
+    # share a second-granularity detected_at.
+    limit = max(1, min(limit, 10000))
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            "SELECT * FROM anomalies ORDER BY detected_at DESC"
+            "SELECT * FROM anomalies ORDER BY detected_at DESC, id DESC LIMIT ?",
+            (limit,),
         )
         rows = await cursor.fetchall()
 
