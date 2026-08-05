@@ -25,8 +25,8 @@ const SCENARIO_PROFILES = {
   normal:        { lat: 80,  jitter: 25,  errRate: 0.005 },
   db_slowdown:   { lat: 480, jitter: 180, errRate: 0.18  },
   memory_leak:   { lat: 160, jitter: 80,  errRate: 0.06  },
-  rate_limit:    { lat: 95,  jitter: 30,  errRate: 0.22  },
-  net_partition: { lat: 210, jitter: 90,  errRate: 0.35  },
+  rate_limit_cascade:    { lat: 95,  jitter: 30,  errRate: 0.22  },
+  network_partition: { lat: 210, jitter: 90,  errRate: 0.35  },
 }
 
 let _scenario = 'normal'
@@ -45,7 +45,7 @@ export function generateLogBatch(batchSize = 30) {
     )))
     const isError = Math.random() < profile.errRate
     const status = isError
-      ? (_scenario === 'rate_limit' ? 429 : _scenario === 'net_partition' ? 503 : pick([500, 502, 503]))
+      ? (_scenario === 'rate_limit_cascade' ? 429 : _scenario === 'network_partition' ? 503 : pick([500, 502, 503]))
       : pick([200, 200, 200, 201, 200])
     return {
       id: Date.now() + i,
@@ -63,8 +63,8 @@ function mockErrorMsg(scenario, ep) {
   const msgs = {
     db_slowdown:   ['connection pool exhausted', 'query timeout after 5000ms', 'deadlock detected'],
     memory_leak:   ['heap allocation failed', 'out of memory', 'GC pressure exceeded'],
-    rate_limit:    ['rate limit exceeded: 429', 'too many requests', 'quota exhausted'],
-    net_partition: ['ECONNREFUSED', 'network unreachable', 'timeout: upstream unavailable'],
+    rate_limit_cascade:    ['rate limit exceeded: 429', 'too many requests', 'quota exhausted'],
+    network_partition: ['ECONNREFUSED', 'network unreachable', 'timeout: upstream unavailable'],
   }
   return pick(msgs[scenario] || ['internal server error'])
 }
@@ -109,12 +109,12 @@ export function generateAnomalies() {
       { service: '/api/search',   impact: 'Search heap at 87%' },
       { service: '/api/products', impact: 'Products response degraded' },
     ],
-    rate_limit:    [
+    rate_limit_cascade:    [
       { service: '/api/auth',     impact: 'Auth returning 429' },
       { service: '/api/checkout', impact: 'Checkout blocked — no auth tokens' },
       { service: '/api/payments', impact: 'Payment flow halted' },
     ],
-    net_partition: [
+    network_partition: [
       { service: '/api/inventory',  impact: 'Inventory unreachable' },
       { service: '/api/cart',       impact: '65% of cart reads failing' },
       { service: '/api/checkout',   impact: 'Checkout ECONNREFUSED' },
@@ -125,7 +125,7 @@ export function generateAnomalies() {
     id: 1000 + i,
     anomaly_type: _scenario === 'db_slowdown' ? 'latency_spike'
                 : _scenario === 'memory_leak'  ? 'memory_pressure'
-                : _scenario === 'rate_limit'   ? 'error_surge'
+                : _scenario === 'rate_limit_cascade'   ? 'error_surge'
                 : 'connectivity_failure',
     severity: i === 0 ? 'critical' : 'high',
     endpoint: c.service,
@@ -143,8 +143,8 @@ export function generateAiAnalyses(anomalies) {
   const texts = {
     db_slowdown:   'Connection pool exhausted on /api/auth (pool size: 10, demand: 28). Auth latency exceeded 500ms SLA, cascading timeouts to cart and checkout. Immediate actions: (1) increase pool size to 50 in DATABASE_POOL_SIZE env var, (2) add circuit breaker on cart → auth calls, (3) restart auth pod to clear stale connections.',
     memory_leak:   'Heap growing at ~12MB/min on search service. GC pause times now 200ms+, causing P95 latency to hit 620ms. Likely culprit: unbounded in-memory cache in product indexer. Actions: (1) cap cache size with LRU eviction, (2) restart search service now to recover heap, (3) add memory alert at 70% threshold.',
-    rate_limit:    'Auth service rate limit hit — 429s flooding all downstream. Root cause: bot traffic spike from crawler subnet 54.23.x.x (1,200 rps). Actions: (1) block subnet in WAF, (2) raise auth rate limit to 2,000 rpm for internal services, (3) add Retry-After header to 429 responses.',
-    net_partition: 'Network partition isolating inventory service — ECONNREFUSED from us-east-1b AZ. 65% of cart reads failing. Actions: (1) reroute inventory traffic to us-east-1a replica, (2) enable stale-read fallback for cart service, (3) file incident with infra team for AZ recovery.',
+    rate_limit_cascade:    'Auth service rate limit hit — 429s flooding all downstream. Root cause: bot traffic spike from crawler subnet 54.23.x.x (1,200 rps). Actions: (1) block subnet in WAF, (2) raise auth rate limit to 2,000 rpm for internal services, (3) add Retry-After header to 429 responses.',
+    network_partition: 'Network partition isolating inventory service — ECONNREFUSED from us-east-1b AZ. 65% of cart reads failing. Actions: (1) reroute inventory traffic to us-east-1a replica, (2) enable stale-read fallback for cart service, (3) file incident with infra team for AZ recovery.',
   }
   for (const a of anomalies) {
     analyses[a.id] = {
