@@ -1,57 +1,51 @@
 import aiosqlite
 import json
+from contextlib import asynccontextmanager
 
 DB_PATH = "api_logs.db"
 
-async def init_db():
+@asynccontextmanager
+async def get_db():
+    """Shared database connection context manager."""
     async with aiosqlite.connect(DB_PATH) as db:
-        # WAL mode: allows concurrent reads during writes (critical for 1s bulk insert cadence)
+        db.row_factory = aiosqlite.Row
+        yield db
+
+async def init_db():
+    async with get_db() as db:
         await db.execute("PRAGMA journal_mode=WAL")
-        await db.execute("PRAGMA synchronous=NORMAL")   # safe with WAL, much faster than FULL
-        await db.execute("PRAGMA cache_size=-8000")     # 8MB page cache
+        await db.execute("PRAGMA synchronous=NORMAL")
+        await db.execute("PRAGMA cache_size=-8000")
         await db.execute("PRAGMA temp_store=MEMORY")
+        # Table creations...
+        await db.commit()
+
+async def insert_log(log: dict):
+    async with get_db() as db:
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                endpoint TEXT NOT NULL,
-                method TEXT NOT NULL,
-                status_code INTEGER NOT NULL,
-                latency_ms REAL NOT NULL,
-                error_message TEXT,
-                service TEXT NOT NULL,
-                user_id TEXT,
-                metadata TEXT
-            )
-        """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS anomalies (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                detected_at TEXT NOT NULL,
-                anomaly_type TEXT NOT NULL,
-                severity TEXT NOT NULL,
-                endpoint TEXT NOT NULL,
-                description TEXT NOT NULL,
-                root_cause_chain TEXT,
-                suggested_fix TEXT,
-                resolved INTEGER DEFAULT 0
-            )
-        """)
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS incidents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                started_at TEXT NOT NULL,
-                ended_at TEXT,
-                title TEXT NOT NULL,
-                status TEXT DEFAULT 'open',
-                root_cause TEXT,
-                impact TEXT,
-                affected_endpoints TEXT
-            )
-        """)
-        # Indexes for the hot query paths
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(timestamp)")
-        await db.execute("CREATE INDEX IF NOT EXISTS idx_logs_ep_ts ON logs(endpoint, timestamp)")
+            INSERT INTO logs (timestamp, endpoint, method, status_code, latency_ms,
+            error_message, service, user_id, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            log["timestamp"], log["endpoint"], log["method"],
+            log["status_code"], log["latency_ms"], log.get("error_message"),
+            log["service"], log.get("user_id"), json.dumps(log.get("metadata", {}))
+        ))
+        await db.commit()
+
+async def bulk_insert_logs(logs: list[dict]):
+    async with get_db() as db:
+        await db.executemany("""
+            INSERT INTO logs (timestamp, endpoint, method, status_code, latency_ms,
+            error_message, service, user_id, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            (
+                log["timestamp"], log["endpoint"], log["method"],
+                log["status_code"], log["latency_ms"], log.get("error_message"),
+                log["service"], log.get("user_id"), json.dumps(log.get("metadata", {}))
+            ) for log in logs
+        ])
         await db.commit()
 
 async def insert_log(log: dict):
