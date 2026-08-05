@@ -2,13 +2,14 @@ import asyncio
 import csv
 import io
 import json
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
 import aiosqlite
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -119,12 +120,27 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Sentinel — API Intelligence Platform", lifespan=lifespan)
 
+# Restrict CORS to the known frontend origin(s). Set ALLOWED_ORIGINS in the
+# deployment (comma-separated); defaults cover local dev.
+_allowed_origins = [
+    o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()
+] or ["http://localhost:5173", "http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def require_api_key(x_api_key: Optional[str] = Header(default=None)):
+    """Guard the Groq-backed / state-mutating POST routes. When API_KEY is set
+    in the environment, callers must send a matching X-Api-Key header; if it's
+    unset (e.g. local dev), the check is a no-op so the app still runs."""
+    expected = os.environ.get("API_KEY", "")
+    if expected and x_api_key != expected:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 # REST endpoints
 @app.get("/api/health")
@@ -168,7 +184,7 @@ class ScenarioRequest(BaseModel):
     scenario: str
     intensity: float = 1.0
 
-@app.post("/api/scenario")
+@app.post("/api/scenario", dependencies=[Depends(require_api_key)])
 async def inject_scenario(req: ScenarioRequest):
     if req.scenario not in SCENARIOS:
         raise HTTPException(400, f"Unknown scenario. Valid: {list(SCENARIOS.keys())}")
@@ -187,12 +203,12 @@ class ChatRequest(BaseModel):
     message: str
     history: list[dict] = []
 
-@app.post("/api/chat")
+@app.post("/api/chat", dependencies=[Depends(require_api_key)])
 async def chat_endpoint(req: ChatRequest):
     response = await chat(req.message, req.history)
     return {"response": response}
 
-@app.post("/api/chat/stream")
+@app.post("/api/chat/stream", dependencies=[Depends(require_api_key)])
 async def chat_stream_endpoint(req: ChatRequest):
     """Server-Sent Events streaming chat — tokens arrive as they're generated."""
     async def event_generator():
@@ -213,7 +229,7 @@ async def chat_stream_endpoint(req: ChatRequest):
         }
     )
 
-@app.post("/api/incident-report")
+@app.post("/api/incident-report", dependencies=[Depends(require_api_key)])
 async def incident_report():
     anomalies_data = await get_recent_anomalies(20)
     if not anomalies_data:
