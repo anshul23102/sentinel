@@ -157,6 +157,17 @@ async def prune_old_logs(minutes: int = 15):
         )
         await db.commit()
 
+async def prune_old_anomalies(minutes: int = 1440):
+    """Keep the anomalies table bounded too — it grows on every state transition
+    and was previously never pruned. Default retention is 24h (anomalies are
+    sparse and are the incident record, so kept far longer than raw logs)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "DELETE FROM anomalies WHERE detected_at < strftime('%Y-%m-%dT%H:%M:%S', 'now', ? || ' minutes')",
+            (f"-{minutes}",)
+        )
+        await db.commit()
+
 async def get_timeseries(minutes: int = 10):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
