@@ -22,10 +22,10 @@ def _z_score(value: float, window: deque) -> float:
         return 0.0
     arr = np.array(window)
     std = arr.std()
-    if std == 0:
-        # If baseline has zero variance, any value above the mean is a significant spike
-        return 3.0 if value > arr.mean() else 0.0
-    return (value - arr.mean()) / std
+    # Apply a minimum noise floor (5.0ms) to prevent micro-spikes on flat baselines
+    if std < 5.0:
+        std = 5.0
+    return float((value - arr.mean()) / std)
 
 def _error_rate(window: deque) -> float:
     """Count ANY failed request (4xx + 5xx) — aligns with frontend liveStats."""
