@@ -183,7 +183,10 @@ def _summarize_logs(logs: list[dict], endpoint: str) -> dict:
         return {"message": "No logs found for this endpoint"}
 
     total = len(endpoint_logs)
-    errors = [entry for entry in endpoint_logs if entry["status_code"] >= 500]
+    # Count any failure (>= 400), matching the anomaly detector's error-surge
+    # threshold. Counting only >= 500 handed the LLM "error_count: 0" during
+    # 4xx surges (e.g. 429 rate-limit cascades) it was asked to diagnose.
+    errors = [entry for entry in endpoint_logs if entry["status_code"] >= 400]
     latencies = [entry["latency_ms"] for entry in endpoint_logs]
     error_msgs = list({entry["error_message"] for entry in errors if entry.get("error_message")})[:5]
 
