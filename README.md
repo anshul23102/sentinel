@@ -114,13 +114,13 @@ WebSocket Broadcast --> React Dashboard (real-time)
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| **Backend** | Python 3.11, FastAPI, aiosqlite, WebSockets, SSE |
-| **AI** | Groq Cloud, Llama 3.3 70B Versatile |
-| **Detection** | Z-score, sliding window, least-squares linear regression |
-| **Frontend** | React 18, Vite, Recharts, Canvas API |
-| **Database** | SQLite with WAL mode, indexed for concurrent reads/writes |
+ | Layer | Technology |
+ |---|---|
+ | **Backend** | Python 3.11, FastAPI, aiosqlite, WebSockets, SSE |
+ | **AI** | Groq Cloud, Llama 3.3 70B Versatile |
+ | **Detection** | Z-score, sliding window, least-squares linear regression |
+ | **Frontend** | React 18, Vite, Recharts, Canvas API |
+ | **Database** | SQLite with WAL mode, indexed for concurrent reads/writes |
 
 ---
 
@@ -207,7 +207,13 @@ sentinel/
 |   +-- log_generator.py     # Synthetic traffic at 30 rps, 5 failure scenarios
 |   +-- ai_agent.py          # Groq integration, streaming chat, root cause analysis
 |   +-- db.py                # SQLite with WAL mode, indexes, auto-pruning
+|   +-- task_supervisor.py   # Background task supervisor with auto-restart
 |   +-- requirements.txt
+|   +-- tests/
+|       +-- test_api_auth.py
+|       +-- test_ai_summary.py
+|       +-- test_anomaly_detector.py
+|       +-- test_task_supervisor.py
 +-- frontend/
     +-- src/
         +-- pages/
@@ -252,6 +258,68 @@ Example:
 SENTINEL_ANOMALY_ZSCORE_THRESHOLD=3.0
 SENTINEL_ANOMALY_ERROR_RATE_THRESHOLD=0.20
 ```
+
+
+## Background Task Supervision
+
+Sentinel uses a production-quality **TaskSupervisor** to manage critical background tasks with automatic restart capability. This ensures monitoring continues even if tasks crash due to unexpected errors.
+
+### How It Works
+
+The supervisor manages two critical long-running tasks:
+
+1. **log_pipeline** - Generates synthetic logs, detects anomalies, and broadcasts updates via WebSocket
+2. **periodic_scan** - Runs anomaly scans every 5 seconds, broadcasts health snapshots, and prunes old database rows
+
+### Key Features
+
+- **Automatic Restart**: If a task crashes, it's automatically restarted without manual intervention
+- **Exponential Backoff**: After each failure, the restart delay increases exponentially (1s, 2s, 4s, 8s, ...) to prevent overwhelming a struggling system
+- **Maximum Backoff Cap**: Delays are capped at 60 seconds to balance recovery time with monitoring continuity
+- **Graceful Shutdown**: On application shutdown, all tasks are properly cancelled and awaited, preventing orphan tasks
+- **Structured Logging**: All lifecycle events (start, crash, restart, cancellation) are logged with structured messages
+
+### Configuration
+
+Backoff parameters are configurable via `SupervisorConfig`:
+
+- `initial_backoff` (default: 1.0s) - Initial delay before first restart
+- `max_backoff` (default: 60.0s) - Maximum restart delay
+- `backoff_multiplier` (default: 2.0) - Exponential growth factor
+- `jitter_factor` (default: 0.1) - Random jitter to prevent thundering herd
+
+### Health Monitoring
+
+The `/api/health` endpoint includes detailed supervision status:
+
+```json
+{
+  "monitoring": {
+    "log_pipeline_running": true,
+    "anomaly_detector_running": true,
+    "connected_websocket_clients": 3,
+    "last_monitoring_cycle": "2026-05-25T21:53:54",
+    "supervised_tasks": {
+      "log_pipeline": {
+        "running": true,
+        "restart_count": 0,
+        "current_backoff": 1.0,
+        "last_started": "2026-05-25T21:50:00",
+        "last_crashed": null
+      },
+      "periodic_scan": {
+        "running": true,
+        "restart_count": 2,
+        "current_backoff": 4.0,
+        "last_started": "2026-05-25T21:50:05",
+        "last_crashed": "2026-05-25T21:52:00"
+      }
+    }
+  }
+}
+```
+
+This provides visibility into task health, restart history, and current backoff state for operational monitoring.
 
 ---
 

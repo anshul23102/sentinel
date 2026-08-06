@@ -2,6 +2,7 @@ import asyncio
 import csv
 import io
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -20,6 +21,9 @@ from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stat
 from log_generator import run_generator, set_scenario, get_current_scenario, SCENARIOS  # noqa: E402
 from anomaly_detector import process_log_batch, get_health_snapshot, run_anomaly_scan  # noqa: E402
 from ai_agent import analyze_anomaly, chat, chat_stream, generate_incident_report  # noqa: E402
+from task_supervisor import TaskSupervisor, SupervisorConfig  # noqa: E402
+
+logger = logging.getLogger("sentinel")
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -46,9 +50,8 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# Runtime monitoring state
-pipeline_task = None
-scan_task = None
+# Background task supervisor instance
+_supervisor: TaskSupervisor | None = None
 last_monitoring_cycle = None
 
 # Background pipeline
@@ -65,7 +68,7 @@ async def log_pipeline():
                 # Non-blocking AI analysis — ID is already in anomaly dict
                 task = asyncio.create_task(_async_ai_analysis(anomaly))
                 task.add_done_callback(
-                    lambda t: t.exception() and print(f"[AI] Analysis task failed: {t.exception()}")
+                    lambda t: t.exception() and logger.error("[AI] Analysis task failed: %s", t.exception())
                 )
         await manager.broadcast(message)
 
@@ -78,7 +81,7 @@ async def _async_ai_analysis(anomaly: dict):
         result      = await analyze_anomaly(anomaly, recent_logs)
         await manager.broadcast({"type": "ai_analysis", "data": result})
     except Exception as e:
-        print(f"[AI] Analysis failed for {anomaly.get('endpoint')}: {e}")
+        logger.error("[AI] Analysis failed for %s: %s", anomaly.get('endpoint'), e)
 
 async def periodic_scan():
     """Every 5s: run anomaly scan, broadcast health, and prune old DB rows."""
@@ -99,24 +102,31 @@ async def periodic_scan():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global pipeline_task, scan_task
+    global _supervisor
 
     await init_db()
 
-    pipeline_task = asyncio.create_task(log_pipeline())
-    scan_task = asyncio.create_task(periodic_scan())
+    # Supervisor configuration with production-ready backoff settings
+    config = SupervisorConfig(
+        initial_backoff=1.0,   # Start with 1s delay
+        max_backoff=60.0,      # Cap at 60s
+        backoff_multiplier=2.0 # Double each time
+    )
+    _supervisor = TaskSupervisor(config)
+
+    # Register critical monitoring tasks
+    _supervisor.register("log_pipeline", log_pipeline)
+    _supervisor.register("periodic_scan", periodic_scan)
+
+    # Start all supervised tasks
+    await _supervisor.start_all()
 
     try:
         yield
     finally:
-        pipeline_task.cancel()
-        scan_task.cancel()
-
-        await asyncio.gather(
-            pipeline_task,
-            scan_task,
-            return_exceptions=True,
-        )
+        logger.info("Application shutting down - stopping supervisor")
+        if _supervisor:
+            await _supervisor.shutdown()
 
 app = FastAPI(title="Sentinel — API Intelligence Platform", lifespan=lifespan)
 
@@ -146,18 +156,30 @@ def require_api_key(x_api_key: Optional[str] = Header(default=None)):
 @app.get("/api/health")
 async def health():
     health_data = dict(get_health_snapshot())
-    health_data["monitoring"] = {
-        "log_pipeline_running": (
-            pipeline_task is not None
-            and not pipeline_task.done()
-        ),
-        "anomaly_detector_running": (
-            scan_task is not None
-            and not scan_task.done()
-        ),
+    
+    # Get monitoring status from supervisor if available
+    monitoring_status = {
         "connected_websocket_clients": len(manager.active),
         "last_monitoring_cycle": last_monitoring_cycle,
     }
+    
+    if _supervisor:
+        pipeline_status = _supervisor.get_task_status("log_pipeline")
+        scan_status = _supervisor.get_task_status("periodic_scan")
+        
+        monitoring_status.update({
+            "log_pipeline_running": pipeline_status.get("running", False),
+            "anomaly_detector_running": scan_status.get("running", False),
+            "supervised_tasks": _supervisor.get_all_status(),
+        })
+    else:
+        # Fallback if supervisor not initialized yet
+        monitoring_status.update({
+            "log_pipeline_running": False,
+            "anomaly_detector_running": False,
+        })
+    
+    health_data["monitoring"] = monitoring_status
     return health_data
 
 @app.get("/api/logs")
@@ -258,7 +280,7 @@ async def export_incidents(format: str = "csv", limit: int = 1000):
         return StreamingResponse(
             io.StringIO(content),
             media_type="application/json",
-            headers={"Content-Disposition": "attachment; filename=sentinel_incidents.json"},
+            headers={"Content-Disposition": "attachment: filename=sentinel_incidents.json"},
         )
 
     output = io.StringIO()
@@ -272,7 +294,7 @@ async def export_incidents(format: str = "csv", limit: int = 1000):
     return StreamingResponse(
         output,
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=sentinel_incidents.csv"},
+        headers={"Content-Disposition": "attachment: filename=sentinel_incidents.csv"},
     )
 
 # WebSocket
