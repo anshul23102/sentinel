@@ -17,7 +17,6 @@ Tests cover:
 
 import asyncio
 import logging
-from unittest.mock import patch
 
 import pytest
 
