@@ -52,6 +52,11 @@ async def init_db():
         # Indexes for the hot query paths
         await db.execute("CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(timestamp)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_logs_ep_ts ON logs(endpoint, timestamp)")
+        # Indexes for anomalies and incidents tables
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_detected_at ON anomalies(detected_at)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_endpoint ON anomalies(endpoint)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_incidents_started_at ON incidents(started_at)")
         await db.commit()
 
 async def insert_log(log: dict):
