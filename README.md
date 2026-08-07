@@ -114,13 +114,13 @@ WebSocket Broadcast --> React Dashboard (real-time)
 
 ## Tech Stack
 
- | Layer | Technology |
- |---|---|
- | **Backend** | Python 3.11, FastAPI, aiosqlite, WebSockets, SSE |
- | **AI** | Groq Cloud, Llama 3.3 70B Versatile |
- | **Detection** | Z-score, sliding window, least-squares linear regression |
- | **Frontend** | React 18, Vite, Recharts, Canvas API |
- | **Database** | SQLite with WAL mode, indexed for concurrent reads/writes |
+| Layer | Technology |
+|---|---|
+| **Backend** | Python 3.11, FastAPI, aiosqlite, WebSockets, SSE |
+| **AI** | Groq Cloud, Llama 3.3 70B Versatile |
+| **Detection** | Z-score, sliding window, least-squares linear regression |
+| **Frontend** | React 18, Vite, Recharts, Canvas API |
+| **Database** | SQLite with WAL mode, indexed for concurrent reads/writes |
 
 ---
 

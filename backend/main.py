@@ -280,7 +280,7 @@ async def export_incidents(format: str = "csv", limit: int = 1000):
         return StreamingResponse(
             io.StringIO(content),
             media_type="application/json",
-            headers={"Content-Disposition": "attachment: filename=sentinel_incidents.json"},
+            headers={"Content-Disposition": "attachment; filename=sentinel_incidents.json"},
         )
 
     output = io.StringIO()
@@ -294,7 +294,7 @@ async def export_incidents(format: str = "csv", limit: int = 1000):
     return StreamingResponse(
         output,
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment: filename=sentinel_incidents.csv"},
+        headers={"Content-Disposition": "attachment; filename=sentinel_incidents.csv"},
     )
 
 # WebSocket
