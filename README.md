@@ -234,6 +234,25 @@ sentinel/
 GROQ_API_KEY=your_groq_api_key_here
 ```
 
+### Anomaly Detection Thresholds
+
+The following environment variables control anomaly detection sensitivity.
+Defaults preserve the existing hardcoded behavior.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SENTINEL_ANOMALY_ZSCORE_THRESHOLD` | `2.5` | Z-score above which a latency spike is flagged |
+| `SENTINEL_ANOMALY_ERROR_RATE_THRESHOLD` | `0.15` | Error-rate fraction (0–1) above which an error surge is flagged |
+| `SENTINEL_ANOMALY_LATENCY_THRESHOLD_MS` | `250` | Minimum average latency (ms) to consider a spike |
+| `SENTINEL_ANOMALY_ZSCORE_CLEAR_THRESHOLD` | `1.5` | Z-score below which a resolved latency anomaly is cleared |
+| `SENTINEL_ANOMALY_ERROR_RATE_CLEAR_THRESHOLD` | `0.05` | Error-rate fraction below which a resolved error anomaly is cleared |
+
+Example:
+```
+SENTINEL_ANOMALY_ZSCORE_THRESHOLD=3.0
+SENTINEL_ANOMALY_ERROR_RATE_THRESHOLD=0.20
+```
+
 ---
 
 ## Team

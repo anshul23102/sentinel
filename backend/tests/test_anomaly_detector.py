@@ -20,10 +20,12 @@ from anomaly_detector import (
     _error_windows,
     _request_windows,
     _active_anomalies,
-    LATENCY_Z_THRESHOLD,
-    ERROR_RATE_THRESHOLD,
     _z_score,
     _error_rate,
+)
+from config import (
+    ANOMALY_ZSCORE_THRESHOLD,
+    ANOMALY_ERROR_RATE_THRESHOLD,
 )
 
 
@@ -72,7 +74,7 @@ class TestZscoreHelper:
         # Simulate what process_log_batch does: append the spike first, then call _z_score
         window = deque([80.0] * 55 + [2000.0] * 5, maxlen=60)
         z = _z_score(2000.0, window)
-        assert z > LATENCY_Z_THRESHOLD
+        assert z > ANOMALY_ZSCORE_THRESHOLD
 
     def test_normal_value_gives_low_zscore(self):
         """A value close to the mean should produce a small Z-score."""
@@ -209,7 +211,7 @@ class TestErrorSurgeDetection:
     
     def test_error_rate_exactly_at_threshold_triggers_surge(self):
         """Error rate at or above ERROR_RATE_THRESHOLD must trigger error_surge."""
-        n_errors = int(20 * ERROR_RATE_THRESHOLD) + 1
+        n_errors = int(20 * ANOMALY_ERROR_RATE_THRESHOLD) + 1
         logs = _make_logs("/api/orders", latency_ms=80.0, status_code=200, n=20 - n_errors)
         logs += _make_logs("/api/orders", latency_ms=80.0, status_code=500, n=n_errors)
         anomalies = process_log_batch(logs)
