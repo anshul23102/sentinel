@@ -20,6 +20,7 @@ from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stat
 from log_generator import run_generator, set_scenario, get_current_scenario, SCENARIOS  # noqa: E402
 from anomaly_detector import process_log_batch, get_health_snapshot, run_anomaly_scan  # noqa: E402
 from ai_agent import analyze_anomaly, chat, chat_stream, generate_incident_report  # noqa: E402
+from task_supervisor import TaskSupervisor  # noqa: E402
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -47,14 +48,18 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # Runtime monitoring state
-pipeline_task = None
-scan_task = None
 last_monitoring_cycle = None
+
+# Centralized task supervisor
+supervisor = TaskSupervisor()
 
 # Background pipeline
 async def log_pipeline():
     """Main pipeline: generate logs → detect anomalies → broadcast."""
+    ai_counter = 0
+
     async def broadcast_and_detect(message: dict):
+        nonlocal ai_counter
         if message["type"] == "logs":
             new_anomalies = process_log_batch(message["data"])
             for anomaly in new_anomalies:
@@ -63,13 +68,24 @@ async def log_pipeline():
                 anomaly["id"]  = anomaly_id
                 await manager.broadcast({"type": "anomaly", "data": anomaly})
                 # Non-blocking AI analysis — ID is already in anomaly dict
-                task = asyncio.create_task(_async_ai_analysis(anomaly))
-                task.add_done_callback(
-                    lambda t: t.exception() and print(f"[AI] Analysis task failed: {t.exception()}")
+                task = supervisor.register(
+                    f"ai_analysis_{ai_counter}",
+                    lambda a=anomaly: _async_ai_analysis(a),
                 )
+                task.add_done_callback(_ai_done_callback)
+                ai_counter += 1
         await manager.broadcast(message)
 
     await run_generator(broadcast_and_detect, rps=30)
+
+
+def _ai_done_callback(t):
+    try:
+        exc = t.exception()
+    except asyncio.InvalidStateError:
+        return
+    if exc is not None and not isinstance(exc, asyncio.CancelledError):
+        print(f"[AI] Analysis task failed: {exc}")
 
 async def _async_ai_analysis(anomaly: dict):
     """Run AI root cause analysis in background and broadcast result."""
@@ -99,24 +115,15 @@ async def periodic_scan():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global pipeline_task, scan_task
-
     await init_db()
 
-    pipeline_task = asyncio.create_task(log_pipeline())
-    scan_task = asyncio.create_task(periodic_scan())
+    supervisor.register("pipeline", log_pipeline)
+    supervisor.register("scan", periodic_scan)
 
     try:
         yield
     finally:
-        pipeline_task.cancel()
-        scan_task.cancel()
-
-        await asyncio.gather(
-            pipeline_task,
-            scan_task,
-            return_exceptions=True,
-        )
+        await supervisor.cancel_all()
 
 app = FastAPI(title="Sentinel — API Intelligence Platform", lifespan=lifespan)
 
@@ -147,14 +154,8 @@ def require_api_key(x_api_key: Optional[str] = Header(default=None)):
 async def health():
     health_data = dict(get_health_snapshot())
     health_data["monitoring"] = {
-        "log_pipeline_running": (
-            pipeline_task is not None
-            and not pipeline_task.done()
-        ),
-        "anomaly_detector_running": (
-            scan_task is not None
-            and not scan_task.done()
-        ),
+        "log_pipeline_running": supervisor.is_running("pipeline"),
+        "anomaly_detector_running": supervisor.is_running("scan"),
         "connected_websocket_clients": len(manager.active),
         "last_monitoring_cycle": last_monitoring_cycle,
     }
