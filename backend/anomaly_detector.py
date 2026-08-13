@@ -3,6 +3,14 @@ from collections import defaultdict, deque
 from datetime import datetime, timezone
 from db import insert_anomaly
 
+from config import (  # noqa: E402
+    ANOMALY_ERROR_RATE_THRESHOLD,
+    ANOMALY_ERROR_RATE_CLEAR_THRESHOLD,
+    ANOMALY_LATENCY_THRESHOLD_MS,
+    ANOMALY_ZSCORE_THRESHOLD,
+    ANOMALY_ZSCORE_CLEAR_THRESHOLD,
+)
+
 # Sliding windows per endpoint (60 seconds of data)
 _latency_windows: dict[str, deque] = defaultdict(lambda: deque(maxlen=60))
 _error_windows:   dict[str, deque] = defaultdict(lambda: deque(maxlen=60))
@@ -11,11 +19,9 @@ _request_windows: dict[str, deque] = defaultdict(lambda: deque(maxlen=60))
 # Track already-firing anomalies to avoid spam
 _active_anomalies: dict[str, dict] = {}
 
-# Thresholds
-LATENCY_Z_THRESHOLD  = 2.5
-ERROR_RATE_THRESHOLD = 0.15   # 15% of requests returning 4xx or 5xx
-PREDICTION_WINDOW    = 5       # seconds ahead to project
-PREDICTION_LOOKBACK  = 20      # recent seconds for trend line
+# Prediction parameters (algorithm constants, not sensitivity thresholds)
+PREDICTION_WINDOW   = 5   # seconds ahead to project
+PREDICTION_LOOKBACK = 20  # recent seconds for trend line
 
 def _z_score(value: float, window: deque) -> float:
     if len(window) < 10:
@@ -70,7 +76,7 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
         anomalies_for_ep = []
 
         # Latency spike detection
-        if z > LATENCY_Z_THRESHOLD and avg_latency > 250:
+        if z > ANOMALY_ZSCORE_THRESHOLD and avg_latency > ANOMALY_LATENCY_THRESHOLD_MS:
             key = f"latency_{endpoint}"
             if key not in _active_anomalies:
                 predicted_latency = _predict_trend(_latency_windows[endpoint], PREDICTION_WINDOW)
@@ -88,11 +94,11 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
                 }
                 _active_anomalies[key] = anomaly
                 anomalies_for_ep.append(anomaly)
-        elif z < 1.5:  # FIX 1: Aligned outwardly so it can actually execute and clear old anomalies
+        elif z < ANOMALY_ZSCORE_CLEAR_THRESHOLD:  # clear resolved latency anomalies
             _active_anomalies.pop(f"latency_{endpoint}", None)
 
         # Error rate surge detection
-        if err_rate > ERROR_RATE_THRESHOLD:
+        if err_rate > ANOMALY_ERROR_RATE_THRESHOLD:
             key = f"errors_{endpoint}"
             if key not in _active_anomalies:
                 predicted_err_rate = _predict_trend(
@@ -105,14 +111,14 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
                     "anomaly_type":    "error_surge",
                     "severity":        severity,
                     "endpoint":        endpoint,
-                    "description":     f"Error surge: {err_rate*100:.1f}% failure rate (threshold {ERROR_RATE_THRESHOLD*100:.0f}%). Trend: {'rising' if predicted_err_rate > err_rate else 'stable'}.",
+                    "description":     f"Error surge: {err_rate*100:.1f}% failure rate (threshold {ANOMALY_ERROR_RATE_THRESHOLD*100:.0f}%). Trend: {'rising' if predicted_err_rate > err_rate else 'stable'}.",
                     "root_cause_chain": _build_root_cause_chain(endpoint, "errors", avg_latency, err_rate),
                     "error_rate":       round(err_rate, 3),
                     "predicted_error_rate": round(max(0.0, predicted_err_rate), 3),
                 }
                 _active_anomalies[key] = anomaly
                 anomalies_for_ep.append(anomaly)
-        elif err_rate < 0.05:  # FIX 1: Aligned outwardly so it can clear resolved error surges
+        elif err_rate < ANOMALY_ERROR_RATE_CLEAR_THRESHOLD:  # clear resolved error surges
             _active_anomalies.pop(f"errors_{endpoint}", None)
 
         new_anomalies.extend(anomalies_for_ep)
