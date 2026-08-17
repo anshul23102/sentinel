@@ -101,7 +101,17 @@ async def insert_anomaly(anomaly: dict):
         await db.commit()
         return cursor.lastrowid
 
+# Bounds for user-supplied query params. Clamped here at the shared DB boundary
+# (not per-handler) so every caller is protected: a negative LIMIT is treated by
+# SQLite as "unlimited" and would dump the whole table, and a negative `minutes`
+# builds an invalid "--N minutes" modifier that makes strftime() return NULL, so
+# the WHERE never matches and the endpoint silently returns [].
+MAX_ROW_LIMIT = 1000
+MAX_WINDOW_MINUTES = 1440  # 24h
+
+
 async def get_recent_logs(limit: int = 200, endpoint: str = None):
+    limit = max(1, min(limit, MAX_ROW_LIMIT))
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         if endpoint:
@@ -117,6 +127,7 @@ async def get_recent_logs(limit: int = 200, endpoint: str = None):
         return [dict(r) for r in rows]
 
 async def get_recent_anomalies(limit: int = 20):
+    limit = max(1, min(limit, MAX_ROW_LIMIT))
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
@@ -134,6 +145,7 @@ async def get_recent_anomalies(limit: int = 20):
         return result
 
 async def get_endpoint_stats(minutes: int = 5):
+    minutes = max(1, min(minutes, MAX_WINDOW_MINUTES))
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("""
@@ -174,6 +186,7 @@ async def prune_old_anomalies(minutes: int = 1440):
         await db.commit()
 
 async def get_timeseries(minutes: int = 10):
+    minutes = max(1, min(minutes, MAX_WINDOW_MINUTES))
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("""
