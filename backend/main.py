@@ -301,13 +301,16 @@ async def export_incidents(format: str = "csv", limit: int = 1000):
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await manager.connect(ws)
-    # Push current state immediately on connect
-    health          = get_health_snapshot()
-    recent_anomalies = await get_recent_anomalies(10)
-    await ws.send_json({"type": "health",          "data": health})
-    await ws.send_json({"type": "init_anomalies",  "data": recent_anomalies})
-    await ws.send_json({"type": "scenario_change", "data": {"scenario": get_current_scenario()}})
     try:
+        # Push current state immediately on connect. These sends must stay inside
+        # the try: if the client drops during the handshake (reload, mobile
+        # backgrounding, LB probe) one of them raises before the receive loop,
+        # so disconnect() has to run to prune the dead socket from manager.active.
+        health          = get_health_snapshot()
+        recent_anomalies = await get_recent_anomalies(10)
+        await ws.send_json({"type": "health",          "data": health})
+        await ws.send_json({"type": "init_anomalies",  "data": recent_anomalies})
+        await ws.send_json({"type": "scenario_change", "data": {"scenario": get_current_scenario()}})
         while True:
             try:
                 await ws.receive_text()  # keep-alive / ping
