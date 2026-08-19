@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 from collections import defaultdict, deque
 from datetime import datetime, timezone
@@ -11,10 +13,30 @@ from config import (  # noqa: E402
     ANOMALY_ZSCORE_CLEAR_THRESHOLD,
 )
 
-# Sliding windows per endpoint (60 seconds of data)
-_latency_windows: dict[str, deque] = defaultdict(lambda: deque(maxlen=60))
-_error_windows:   dict[str, deque] = defaultdict(lambda: deque(maxlen=60))
-_request_windows: dict[str, deque] = defaultdict(lambda: deque(maxlen=60))
+# Sliding windows per endpoint, holding the last WINDOW_SECONDS of data as
+# (monotonic_timestamp, value) pairs. These were previously deque(maxlen=60),
+# which bounds by SAMPLE COUNT, not time — so "60 seconds of data" only held at
+# exactly ~1 req/s. On busy endpoints the window collapsed to a few seconds (a
+# real latency ramp got absorbed into the moving baseline and was never flagged);
+# on quiet endpoints it spanned minutes (stale critical/degraded health lingered
+# long after a scenario ended). Now bounded by wall-clock age instead.
+WINDOW_SECONDS = 60
+
+_latency_windows: dict[str, deque] = defaultdict(deque)
+_error_windows:   dict[str, deque] = defaultdict(deque)
+_request_windows: dict[str, deque] = defaultdict(deque)
+
+
+def _evict(window: deque, now: float) -> None:
+    """Drop (timestamp, value) entries older than WINDOW_SECONDS off the left."""
+    cutoff = now - WINDOW_SECONDS
+    while window and window[0][0] < cutoff:
+        window.popleft()
+
+
+def _values(window: deque) -> list:
+    """Extract just the values from a (timestamp, value) window."""
+    return [v for _, v in window]
 
 # Track already-firing anomalies to avoid spam
 _active_anomalies: dict[str, dict] = {}
@@ -61,17 +83,26 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
         endpoint_batches[ep].append(log)
 
     new_anomalies = []
+    now = time.monotonic()
 
     for endpoint, batch in endpoint_batches.items():
-        # FIX 2: Append error and request logs immediately so they are counted in the current check
+        # Append error and request logs immediately so they are counted in the
+        # current check, then drop anything that fell out of the time window.
         for log in batch:
-            _error_windows[endpoint].append(log["status_code"])
-            _request_windows[endpoint].append(1)
+            _error_windows[endpoint].append((now, log["status_code"]))
+            _request_windows[endpoint].append((now, 1))
+        _evict(_error_windows[endpoint], now)
+        _evict(_request_windows[endpoint], now)
+
+        # Drop stale latency samples before using them as the baseline.
+        _evict(_latency_windows[endpoint], now)
+        latency_values = _values(_latency_windows[endpoint])
+        error_values   = _values(_error_windows[endpoint])
 
         avg_latency = np.mean([log["latency_ms"] for log in batch])
         # Calculate z-score BEFORE updating latency window to prevent baseline data pollution
-        z           = _z_score(avg_latency, _latency_windows[endpoint])
-        err_rate    = _error_rate(_error_windows[endpoint])
+        z           = _z_score(avg_latency, latency_values)
+        err_rate    = _error_rate(error_values)
 
         anomalies_for_ep = []
 
@@ -79,7 +110,7 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
         if z > ANOMALY_ZSCORE_THRESHOLD and avg_latency > ANOMALY_LATENCY_THRESHOLD_MS:
             key = f"latency_{endpoint}"
             if key not in _active_anomalies:
-                predicted_latency = _predict_trend(_latency_windows[endpoint], PREDICTION_WINDOW)
+                predicted_latency = _predict_trend(latency_values, PREDICTION_WINDOW)
                 severity = "critical" if z > 3.5 or avg_latency > 800 else "warning"
                 anomaly = {
                     "detected_at":     datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
@@ -102,7 +133,7 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
             key = f"errors_{endpoint}"
             if key not in _active_anomalies:
                 predicted_err_rate = _predict_trend(
-                    deque([1 if s >= 400 else 0 for s in _error_windows[endpoint]], maxlen=60),
+                    [1 if s >= 400 else 0 for s in error_values],
                     PREDICTION_WINDOW
                 )
                 severity = "critical" if err_rate > 0.35 else "warning"
@@ -125,7 +156,7 @@ def process_log_batch(logs: list[dict]) -> list[dict]:
 
         # Update sliding latency window after calculations to prevent baseline data pollution
         for log in batch:
-            _latency_windows[endpoint].append(log["latency_ms"])
+            _latency_windows[endpoint].append((now, log["latency_ms"]))
 
     return new_anomalies
 
@@ -161,9 +192,14 @@ def _build_root_cause_chain(endpoint: str, anomaly_type: str, avg_latency: float
 def get_health_snapshot() -> dict:
     """Current health of all monitored endpoints, with uptime percentage."""
     snapshot = {}
-    for endpoint in _latency_windows:
-        window  = _latency_windows[endpoint]
-        err_win = _error_windows[endpoint]
+    now = time.monotonic()
+    for endpoint in list(_latency_windows):
+        # Evict stale samples so a quiet endpoint's health reflects the last
+        # WINDOW_SECONDS, not whatever it last saw minutes ago.
+        _evict(_latency_windows[endpoint], now)
+        _evict(_error_windows[endpoint], now)
+        window  = _values(_latency_windows[endpoint])
+        err_win = _values(_error_windows[endpoint])
         if not window:
             continue
 
