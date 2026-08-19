@@ -91,6 +91,24 @@ Be specific to this anomaly — reference actual numbers from the logs. Under 25
         "model": MODEL,
     }
 
+def _clean_history(conversation_history: list[dict]) -> list[dict]:
+    """Keep only well-formed {role, content} items from the last 8 turns.
+
+    `ChatRequest.history` is typed `list[dict]`, so Pydantic accepts arbitrary
+    dicts; indexing `msg["role"]`/`msg["content"]` on a malformed item raised a
+    KeyError that surfaced as an unhandled 500. Skip anything that isn't a dict
+    with string role+content so one bad entry can't crash the request (#70).
+    """
+    cleaned = []
+    for msg in (conversation_history or [])[-8:]:
+        if not isinstance(msg, dict):
+            continue
+        role, content = msg.get("role"), msg.get("content")
+        if isinstance(role, str) and isinstance(content, str):
+            cleaned.append({"role": role, "content": content})
+    return cleaned
+
+
 async def chat_stream(message: str, conversation_history: list[dict]):
     """Streaming version — yields text chunks as they arrive from Groq."""
     health          = get_health_snapshot()
@@ -100,8 +118,7 @@ async def chat_stream(message: str, conversation_history: list[dict]):
     system_with_context = _build_system_with_context(health, recent_anomalies, stats)
 
     messages = [{"role": "system", "content": system_with_context}]
-    for msg in conversation_history[-8:]:
-        messages.append({"role": msg["role"], "content": msg["content"]})
+    messages.extend(_clean_history(conversation_history))
     messages.append({"role": "user", "content": message})
 
     c = _get_client()
@@ -132,8 +149,7 @@ async def chat(message: str, conversation_history: list[dict]) -> str:
     messages = [{"role": "system", "content": system_with_context}]
 
     # Replay conversation history with clean messages (no embedded context blobs)
-    for msg in conversation_history[-8:]:
-        messages.append({"role": msg["role"], "content": msg["content"]})
+    messages.extend(_clean_history(conversation_history))
 
     # Current user message — just the raw text, no context injected here
     messages.append({"role": "user", "content": message})
