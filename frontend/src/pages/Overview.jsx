@@ -659,7 +659,7 @@ export default function Overview({ health, healthHistory, timeseries, anomalies,
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {anomalies.slice(0, 4).map(a => <IncidentRow key={a.detected_at + a.endpoint} a={a} />)}
+            {anomalies.slice(0, 4).map(a => <IncidentRow key={a.id ?? a.detected_at + a.endpoint + a.anomaly_type} a={a} />)}
             {anomalies.length > 4 && (
               <p style={{ fontSize: 12, color: 'var(--text-25)', padding: '8px 0', textAlign: 'center' }}>
                 +{anomalies.length - 4} more. View in Incidents.

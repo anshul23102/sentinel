@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import Markdown from '../components/Markdown'
+import { SESSION_ID } from '../hooks/useWebSocket'
 
 const SEVERITY_STYLE = {
   critical: { color: '#f87171', bg: 'rgba(248,113,113,0.1)',  border: 'rgba(248,113,113,0.3)',  dot: '#f87171' },
@@ -24,7 +25,9 @@ export default function Incidents({ anomalies, aiAnalyses }) {
     setShowExportMenu(false)
     try {
       const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
-      const res = await fetch(`${BACKEND}/api/incidents/export?format=${format}`)
+      const res = await fetch(`${BACKEND}/api/incidents/export?format=${format}`, {
+        headers: { 'X-Session-Id': SESSION_ID },
+      })
       if (!res.ok) throw new Error('Export failed')
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -173,7 +176,7 @@ export default function Incidents({ anomalies, aiAnalyses }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map((a, i) => (
             <IncidentCard
-              key={`${a.detected_at}-${i}`}
+              key={a.id ?? `${a.detected_at}-${i}`}
               anomaly={a}
               analysis={a.id != null ? aiAnalyses?.[a.id] : null}
               open={i < 2}

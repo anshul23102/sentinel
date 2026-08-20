@@ -123,7 +123,15 @@ export function useWebSocket() {
       const socket = new WebSocket(WS_URL)
       ws.current = socket
 
+      // Guards against a stale socket's async close/message handlers firing
+      // after a newer connect() has already replaced ws.current — without
+      // this, React StrictMode's rapid mount→cleanup→mount can leave an
+      // old socket's onclose seeing state meant for the socket that
+      // superseded it, and schedule a spurious extra reconnect.
+      const isCurrent = () => ws.current === socket
+
       socket.onopen = () => {
+        if (!isCurrent()) { socket.close(); return }
         // Real backend connected — cancel demo fallback and stop mock if running
         if (demoTimer.current) {
           clearTimeout(demoTimer.current)
@@ -135,6 +143,7 @@ export function useWebSocket() {
       }
 
       socket.onclose = () => {
+        if (!isCurrent()) return  // superseded by a newer socket — not a real disconnect
         setConnected(false)
         if (!isMock.current) {
           // Schedule demo fallback if not already running
@@ -151,6 +160,7 @@ export function useWebSocket() {
       socket.onerror = () => socket.close()
 
       socket.onmessage = (e) => {
+        if (!isCurrent()) return  // stale socket — its state has already been superseded
         if (isMock.current) return  // ignore real messages while in demo mode (shouldn't happen)
         let msg
         try { msg = JSON.parse(e.data) } catch { return }
@@ -162,7 +172,9 @@ export function useWebSocket() {
             break
 
           case 'anomaly':
-            setAnomalies(prev => [msg.data, ...prev].slice(0, 50))
+            setAnomalies(prev =>
+              prev.some(a => a.id === msg.data.id) ? prev : [msg.data, ...prev].slice(0, 50)
+            )
             break
 
           case 'init_anomalies':
@@ -218,7 +230,9 @@ export function useWebSocket() {
     const interval = setInterval(fetchTimeseries, 10000)
     return () => {
       document.removeEventListener("visibilitychange",handleVisibilityChange)
-      ws.current?.close()
+      const socketToClose = ws.current
+      ws.current = null  // marks socketToClose as stale before its async onclose fires
+      socketToClose?.close()
       clearInterval(interval)
       if (demoTimer.current) {
         clearTimeout(demoTimer.current)
