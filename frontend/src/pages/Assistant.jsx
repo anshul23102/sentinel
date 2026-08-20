@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import Markdown from '../components/Markdown'
+import { SESSION_ID } from '../hooks/useWebSocket'
 
 const API = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
 
@@ -61,7 +62,7 @@ export default function Assistant({ getIncidentReport, anomalies }) {
       abortRef.current = ctrl
       const res    = await fetch(`${API}/api/chat/stream`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Session-Id': SESSION_ID },
         body:    JSON.stringify({ message: text, history: history.slice(0, -1) }),
         signal:  ctrl.signal,
       })
@@ -239,7 +240,7 @@ export default function Assistant({ getIncidentReport, anomalies }) {
           )}
         </div>
         <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', marginTop: 10 }}>
-          Powered by Llama 3.3 70B via Groq · Press Enter to send
+          Powered by GPT-OSS 120B via Groq · Press Enter to send
         </p>
       </div>
     </div>

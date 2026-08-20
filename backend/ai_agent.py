@@ -1,13 +1,16 @@
+import asyncio
+import threading
 from groq import Groq
 import json
 import os
 from datetime import datetime
 from db import get_recent_logs, get_endpoint_stats, get_recent_anomalies
 from anomaly_detector import get_health_snapshot
+from prompt_guard import wrap_if_suspicious, SYSTEM_PROMPT_ADDENDUM
 
 _api_key = os.environ.get("GROQ_API_KEY", "")
 client = Groq(api_key=_api_key) if _api_key else None
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "openai/gpt-oss-120b"
 
 def _get_client():
     global client, _api_key
@@ -33,7 +36,7 @@ When diagnosing a fresh issue, look for:
 1. Error cascades (one service failing causing others to fail)
 2. Latency correlation (slow DB → slow API → user timeouts)
 3. Traffic patterns (sudden spikes, drops, rate limiting)
-4. Service dependencies (root vs downstream victim)"""
+4. Service dependencies (root vs downstream victim)""" + SYSTEM_PROMPT_ADDENDUM
 
 def _build_system_with_context(health: dict, recent_anomalies: list, stats: list) -> str:
     """Inject live system state into the system message so user messages stay clean."""
@@ -49,11 +52,12 @@ def _build_system_with_context(health: dict, recent_anomalies: list, stats: list
     )
     return BASE_SYSTEM_PROMPT + context_block
 
-def _generate(prompt: str, max_tokens: int = 600) -> str:
+async def _generate(prompt: str, max_tokens: int = 600) -> str:
     c = _get_client()
     if not c:
         return "AI unavailable: GROQ_API_KEY not configured."
-    response = c.chat.completions.create(
+    response = await asyncio.to_thread(
+        c.chat.completions.create,
         model=MODEL,
         messages=[
             {"role": "system", "content": BASE_SYSTEM_PROMPT},
@@ -61,12 +65,13 @@ def _generate(prompt: str, max_tokens: int = 600) -> str:
         ],
         max_tokens=max_tokens,
         temperature=0.5,
+        reasoning_effort="low",
     )
     return response.choices[0].message.content
 
-async def analyze_anomaly(anomaly: dict, recent_logs: list[dict]) -> dict:
+async def analyze_anomaly(sid: str, anomaly: dict, recent_logs: list[dict]) -> dict:
     log_summary = _summarize_logs(recent_logs, anomaly["endpoint"])
-    health = get_health_snapshot()
+    health = await get_health_snapshot(sid)
 
     prompt = f"""ANOMALY: {anomaly['anomaly_type']} on {anomaly['endpoint']} — Severity: {anomaly['severity']}
 Description: {anomaly['description']}
@@ -83,7 +88,7 @@ Log data for {anomaly['endpoint']} (last 60s):
 Give a sharp SRE diagnosis: what is actually happening, why, and the top 3 immediate actions to resolve it.
 Be specific to this anomaly — reference actual numbers from the logs. Under 250 words."""
 
-    analysis = _generate(prompt)
+    analysis = await _generate(prompt)
     return {
         "anomaly_id": anomaly.get("id"),
         "analysis": analysis,
@@ -91,39 +96,65 @@ Be specific to this anomaly — reference actual numbers from the logs. Under 25
         "model": MODEL,
     }
 
-async def chat_stream(message: str, conversation_history: list[dict]):
+async def chat_stream(sid: str, message: str, conversation_history: list[dict]):
     """Streaming version — yields text chunks as they arrive from Groq."""
-    health          = get_health_snapshot()
-    recent_anomalies = await get_recent_anomalies(10)
-    stats           = await get_endpoint_stats(5)
+    health          = await get_health_snapshot(sid)
+    recent_anomalies = await get_recent_anomalies(sid, 10)
+    stats           = await get_endpoint_stats(sid, 5)
 
     system_with_context = _build_system_with_context(health, recent_anomalies, stats)
 
     messages = [{"role": "system", "content": system_with_context}]
     for msg in conversation_history[-8:]:
         messages.append({"role": msg["role"], "content": msg["content"]})
-    messages.append({"role": "user", "content": message})
+    messages.append({"role": "user", "content": wrap_if_suspicious(message)})
 
     c = _get_client()
     if not c:
         yield "AI unavailable: GROQ_API_KEY not configured."
         return
-    stream = c.chat.completions.create(
-        model=MODEL,
-        messages=messages,
-        max_tokens=600,
-        temperature=0.55,
-        stream=True,
-    )
-    for chunk in stream:
-        delta = chunk.choices[0].delta.content
-        if delta:
-            yield delta
 
-async def chat(message: str, conversation_history: list[dict]) -> str:
-    health = get_health_snapshot()
-    recent_anomalies = await get_recent_anomalies(10)
-    stats = await get_endpoint_stats(5)
+    # groq's SDK returns a synchronous iterator — pulling each chunk is a
+    # blocking network read, so it must run off the event loop in a thread.
+    # A worker thread feeds an asyncio.Queue; this coroutine just drains it.
+    loop  = asyncio.get_event_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+    DONE  = object()
+
+    def _consume_stream():
+        try:
+            stream = c.chat.completions.create(
+                model=MODEL,
+                messages=messages,
+                max_tokens=600,
+                temperature=0.55,
+                reasoning_effort="low",
+                stream=True,
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    loop.call_soon_threadsafe(queue.put_nowait, delta)
+        except Exception as e:
+            loop.call_soon_threadsafe(queue.put_nowait, e)
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, DONE)
+
+    threading.Thread(target=_consume_stream, daemon=True).start()
+
+    while True:
+        item = await queue.get()
+        if item is DONE:
+            break
+        if isinstance(item, Exception):
+            yield f"AI error: {item}"
+            break
+        yield item
+
+async def chat(sid: str, message: str, conversation_history: list[dict]) -> str:
+    health = await get_health_snapshot(sid)
+    recent_anomalies = await get_recent_anomalies(sid, 10)
+    stats = await get_endpoint_stats(sid, 5)
 
     # Live context goes into the system prompt ONCE — keeps conversation history clean
     # so the model can actually follow the thread instead of re-anchoring on the same data
@@ -136,16 +167,18 @@ async def chat(message: str, conversation_history: list[dict]) -> str:
         messages.append({"role": msg["role"], "content": msg["content"]})
 
     # Current user message — just the raw text, no context injected here
-    messages.append({"role": "user", "content": message})
+    messages.append({"role": "user", "content": wrap_if_suspicious(message)})
 
     c = _get_client()
     if not c:
         return "AI unavailable: GROQ_API_KEY not configured."
-    response = c.chat.completions.create(
+    response = await asyncio.to_thread(
+        c.chat.completions.create,
         model=MODEL,
         messages=messages,
         max_tokens=600,
         temperature=0.55,
+        reasoning_effort="low",
     )
     return response.choices[0].message.content
 
@@ -175,7 +208,7 @@ Format:
 
 Keep it engineering-focused, under 400 words."""
 
-    return _generate(prompt, max_tokens=800)
+    return await _generate(prompt, max_tokens=800)
 
 def _summarize_logs(logs: list[dict], endpoint: str) -> dict:
     endpoint_logs = [l for l in logs if l["endpoint"] == endpoint]

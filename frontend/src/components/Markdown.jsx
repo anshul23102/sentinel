@@ -1,4 +1,4 @@
-// Renders the markdown patterns returned by Llama 3.3 70B:
+// Renders the markdown patterns returned by GPT-OSS 120B:
 // ## / ### headings, * / - / 1. lists, **bold**, `code`, ``` blocks, blank lines
 export default function Markdown({ text, style = {} }) {
   if (!text) return null

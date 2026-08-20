@@ -19,7 +19,7 @@ const FEATURES = [
     ),
     color: '#a78bfa',
     title: 'AI root cause analysis',
-    desc: 'Every anomaly diagnosed by Llama 3.3 70B with fix steps',
+    desc: 'Every anomaly diagnosed by GPT-OSS 120B with fix steps',
   },
   {
     icon: (
@@ -48,7 +48,7 @@ const STATS = [
   { label: 'Endpoints Monitored', value: 8,    suffix: '',    color: '#c4b5fd' },
   { label: 'Logs / Second',       value: 30,   suffix: ' rps', color: '#22d3ee' },
   { label: 'Failure Scenarios',   value: 5,    suffix: '',    color: '#f87171' },
-  { label: 'AI Model',            value: '70B', suffix: '',   color: '#34d399' },
+  { label: 'AI Model',            value: '120B', suffix: '',   color: '#34d399' },
 ]
 
 export default function WelcomeModal({ onClose }) {
@@ -57,7 +57,7 @@ export default function WelcomeModal({ onClose }) {
 
   // Animate number counters on mount — cancel RAF if modal closes before animation ends
   useEffect(() => {
-    const targets  = [8, 30, 5, 70]
+    const targets  = [8, 30, 5, 120]
     const duration = 900
     const start    = performance.now()
     let rafId
@@ -138,7 +138,7 @@ export default function WelcomeModal({ onClose }) {
 
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', lineHeight: 1.75, marginBottom: 28, maxWidth: 480 }}>
                 Production-grade API failure detection for NexusCommerce. Detects, diagnoses, and explains failures in real time using AI.
-                <span style={{ color: '#c4b5fd', fontWeight: 600 }}> 8 services · 30 rps live traffic · Llama 3.3 70B.</span>
+                <span style={{ color: '#c4b5fd', fontWeight: 600 }}> 8 services · 30 rps live traffic · GPT-OSS 120B.</span>
               </div>
 
               {/* Animated stats */}

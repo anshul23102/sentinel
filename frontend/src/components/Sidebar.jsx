@@ -175,7 +175,7 @@ export default function Sidebar({ page, setPage, anomalyCount, connected, demoMo
       <div style={{ padding: '16px 20px 24px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
         <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', lineHeight: 1.9, marginBottom: 8 }}>
           8 endpoints monitored<br />
-          Llama 3.3 70B via Groq
+          GPT-OSS 120B via Groq
         </div>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 5,
