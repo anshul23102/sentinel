@@ -14,6 +14,30 @@ jobs:
       run:
         working-directory: backend
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sentinel_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,8 +48,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
-          pip install pytest "ruff==0.15.22"
+          pip install -r requirements-dev.txt
+          pip install "ruff==0.15.22"
 
       - name: Lint
         run: ruff check .
@@ -34,6 +58,8 @@ jobs:
         run: pytest tests/ -v
         env:
           GROQ_API_KEY: ""
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sentinel_test
+          REDIS_URL: redis://localhost:6379/1
 
   frontend:
     name: Frontend (build)

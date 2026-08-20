@@ -3,12 +3,17 @@
 default 0) — so running the suite never touches live demo data. These env
 vars must be set before db.py / state.py are imported anywhere, since both
 read them at import time.
+
+Uses setdefault rather than a hard assignment so CI (or any environment
+whose Postgres/Redis need different credentials or a different host) can
+export DATABASE_URL / REDIS_URL before pytest runs and have that take
+precedence over the local-dev default below.
 """
 import os
 import uuid
 
-os.environ["DATABASE_URL"] = "postgresql://localhost/sentinel_test"
-os.environ["REDIS_URL"] = "redis://localhost:6379/1"
+os.environ.setdefault("DATABASE_URL", "postgresql://localhost/sentinel_test")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/1")
 os.environ.setdefault("GROQ_API_KEY", "")  # tests must not require a real key
 
 import pytest
