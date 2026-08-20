@@ -91,3 +91,62 @@ async def test_delete_session_data_removes_everything(sid):
     assert await db.get_recent_logs(sid, limit=10) == []
     assert await db.get_recent_anomalies(sid, limit=10) == []
     assert await db.get_seasonal_history(sid, "/api/test", limit=10) == []
+
+
+@pytest.mark.asyncio
+async def test_negative_log_limit_is_clamped_not_unlimited(sid):
+    await db.bulk_insert_logs(sid, [_log() for _ in range(5)])
+    rows = await db.get_recent_logs(sid, limit=-1)
+    assert len(rows) == 1
+
+
+@pytest.mark.asyncio
+async def test_huge_log_limit_is_capped_at_max_row_limit(sid):
+    await db.bulk_insert_logs(sid, [_log() for _ in range(5)])
+    rows = await db.get_recent_logs(sid, limit=10_000_000)
+    assert len(rows) == 5
+    assert db.MAX_ROW_LIMIT == 1000
+
+
+@pytest.mark.asyncio
+async def test_negative_anomaly_limit_is_clamped(sid):
+    rows = await db.get_recent_anomalies(sid, limit=-1)
+    assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_negative_minutes_still_returns_data_for_endpoint_stats(sid):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    await db.bulk_insert_logs(sid, [_log(ts=now)])
+    stats = await db.get_endpoint_stats(sid, minutes=-5)
+    assert stats, "negative minutes should be clamped, not silently return empty"
+    assert stats[0]["total_requests"] == 1
+
+
+@pytest.mark.asyncio
+async def test_timeseries_negative_minutes_is_clamped(sid):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    await db.bulk_insert_logs(sid, [_log(ts=now)])
+    series = await db.get_timeseries(sid, minutes=-10)
+    assert series, "negative minutes should be clamped for timeseries too"
+    assert db.MAX_WINDOW_MINUTES == 1440
+
+
+@pytest.mark.asyncio
+async def test_prune_old_anomalies_only_affects_the_given_session(sid):
+    other = sid + "-other"
+    old_anomaly = {
+        "detected_at": "2020-01-01T00:00:00", "anomaly_type": "latency_spike",
+        "severity": "warning", "endpoint": "/api/test", "description": "test",
+        "root_cause_chain": [], "suggested_fix": "",
+    }
+    await db.insert_anomaly(sid, old_anomaly)
+    await db.insert_anomaly(other, old_anomaly)
+
+    await db.prune_old_anomalies(sid, minutes=15)
+
+    assert await db.get_recent_anomalies(sid, limit=10) == []
+    assert len(await db.get_recent_anomalies(other, limit=10)) == 1  # untouched
+    await db.delete_session_data(other)

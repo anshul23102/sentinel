@@ -171,6 +171,20 @@ class TaskSupervisor:
         # Store strong reference to prevent garbage collection during backoff
         self._tasks[name] = record
 
+    async def stop_task(self, name: str) -> None:
+        """Cancel and fully unregister a single task — for callers with a
+        dynamic (not fixed-at-startup) set of tasks, such as one per
+        multi-tenant session, where a task needs to go away permanently
+        when its session ends rather than just stop restarting."""
+        async with self._lock:
+            record = self._tasks.pop(name, None)
+        if record is None:
+            return
+        record._shutting_down = True
+        if record.task is not None and not record.task.done():
+            record.task.cancel()
+            await asyncio.gather(record.task, return_exceptions=True)
+
     async def shutdown(self) -> None:
         """
         Gracefully shut down all supervised tasks.

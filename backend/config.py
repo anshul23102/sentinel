@@ -55,10 +55,14 @@ def _validate_clear_vs_detect(clear: float, detect: float, clear_name: str, dete
 # Anomaly detection thresholds
 # ---------------------------------------------------------------------------
 
-#: Z-score above which a latency spike is flagged.
+#: Robust (median/MAD) z-score above which a latency spike is flagged.
+#: 3.5 is the standard cutoff for the modified z-score (Iglewicz & Hoaglin,
+#: "How to Detect and Handle Outliers", 1993) — not the same scale as a
+#: classic mean/std z-score, which is why this default differs from what a
+#: mean/std-based detector would use.
 ANOMALY_ZSCORE_THRESHOLD: float = _load_float(
     "SENTINEL_ANOMALY_ZSCORE_THRESHOLD",
-    2.5,
+    3.5,
     _validate_zscore,
 )
 
