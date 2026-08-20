@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from anomaly_detector import (
-    _robust_z_series, _percentile_confidence, _error_rate,
+    _robust_z_series, _robust_z_single, _percentile_confidence, _error_rate,
     _multivariate_anomaly, process_log_batch, get_health_snapshot,
 )
 
@@ -25,9 +25,37 @@ def test_robust_z_series_handles_zero_variance():
 def test_percentile_confidence_ranks_the_latest_point():
     # needs >=10 points — _percentile_confidence returns 0.0 below that,
     # same "not enough history yet" honesty rule used throughout the detector
-    z = np.array([0.1, 0.2, -0.3, 0.15, 0.05, -0.1, 0.25, -0.2, 0.3, 5.0])  # last point is the extreme one
-    conf = _percentile_confidence(z)
-    assert conf == 1.0  # more extreme than 100% of the rest
+    historical = np.array([0.1, 0.2, -0.3, 0.15, 0.05, -0.1, 0.25, -0.2, 0.3, 0.12])
+    conf = _percentile_confidence(current_z=5.0, historical_z_series=historical)
+    assert conf == 1.0  # more extreme than 100% of history
+
+
+def test_baseline_pollution_understates_a_genuine_spike():
+    """Pins a real, high-impact bug independently found while merging
+    upstream PR #19 (which fixed the identical issue in the previous
+    mean/std detector). The real system pushes an entire ~30-item batch into
+    a 60-item window per tick — so comparing against the window AFTER that
+    push means up to ~50% of the 'baseline' is the very spike being
+    evaluated. A single-point version of this test showed no measurable
+    effect (median/MAD is robust up to ~50% contamination, so 1-of-31 barely
+    moves it) — the batch-sized version below is what actually happens, and
+    the effect is dramatic, not theoretical."""
+    baseline = [72.0 + (i % 5) for i in range(30)]        # healthy history
+    spike_batch = [900.0 + (i % 10) for i in range(30)]   # one tick's worth of a real spike
+
+    # OLD (buggy) approach: push the batch first, then read the z of the
+    # latest point from a window that already contains the whole batch.
+    polluted_window = baseline + spike_batch
+    polluted_z = _robust_z_series(polluted_window)[-1]
+
+    # NEW (fixed) approach: score the batch's average against the baseline
+    # BEFORE the batch is added.
+    avg_latency = sum(spike_batch) / len(spike_batch)
+    correct_z = _robust_z_single(avg_latency, baseline)
+
+    assert polluted_z < 3.5    # the bug: a real, severe spike doesn't even cross threshold
+    assert correct_z > 3.5     # the fix: the same spike is correctly detected
+    assert correct_z > polluted_z * 100  # not a marginal difference — a different outcome entirely
 
 
 def test_error_rate_counts_4xx_and_5xx():
@@ -127,6 +155,30 @@ async def test_health_snapshot_reflects_real_traffic(sid):
     snapshot = await get_health_snapshot(sid)
     assert "/api/search" in snapshot
     assert snapshot["/api/search"]["error_rate"] == pytest.approx(5 / 25, abs=0.01)
+
+
+@pytest.mark.asyncio
+async def test_pure_latency_shift_now_detected_on_first_tick(sid):
+    """Before the baseline-pollution fix, this exact scenario (realistic
+    Gaussian noise, zero errors, seed=42) never fired across 15 full ticks —
+    that's what originally justified adding errors to the sustained-
+    degradation test above, to exercise the reliable error_surge path
+    instead. With the fix, the same pure latency shift fires immediately."""
+    import random
+    random.seed(42)
+    for _ in range(3):
+        healthy = [
+            {"endpoint": "/api/checkout", "latency_ms": max(8, random.gauss(72, 18)), "status_code": 200}
+            for _ in range(30)
+        ]
+        await process_log_batch(sid, healthy)
+
+    spike = [
+        {"endpoint": "/api/checkout", "latency_ms": max(8, random.gauss(850, 220)), "status_code": 200}
+        for _ in range(30)
+    ]
+    anomalies = await process_log_batch(sid, spike)
+    assert any(a["anomaly_type"] == "latency_spike" for a in anomalies)
 
 
 @pytest.mark.asyncio

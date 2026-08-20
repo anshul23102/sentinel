@@ -17,13 +17,10 @@ ERROR_RATE_THRESHOLD   = 0.15   # absolute floor — keeps quiet, low-traffic en
 ISOLATION_MIN_SAMPLES  = 15     # need enough history before the multivariate model means anything
 PREDICTION_WINDOW      = 5      # seconds ahead to project
 
-def _robust_z_series(window: list[float]) -> np.ndarray:
-    """Modified z-score for every point in the window, relative to the window's
-    own median/MAD. Returns an array so callers can both read the latest value
-    and compute an honest percentile-rank confidence from the rest."""
+def _robust_stats(window: list[float]) -> tuple[float, float]:
+    """(median, mad) for a window, with the same zero-MAD epsilon fallback
+    used everywhere a robust z-score is computed."""
     arr = np.array(window, dtype=float)
-    if len(arr) < 10:
-        return np.zeros_like(arr)
     median = np.median(arr)
     mad = np.median(np.abs(arr - median))
     if mad == 0:
@@ -33,16 +30,40 @@ def _robust_z_series(window: list[float]) -> np.ndarray:
         # flagged again until its own noise floor returns — so fall back to
         # a small epsilon scaled to the data itself rather than zero out.
         mad = max(abs(median) * 0.01, 1e-6)
-    return 0.6745 * (arr - median) / mad
+    return median, mad
 
-def _percentile_confidence(z_series: np.ndarray) -> float:
-    """How extreme is the latest point compared to the rest of this endpoint's
-    own recent history? A real, explainable number — not a formula tuned to
-    just converge toward a fixed constant as more samples arrive."""
-    if len(z_series) < 10:
+def _robust_z_series(window: list[float]) -> np.ndarray:
+    """Modified z-score for every point in a window, relative to that same
+    window's own median/MAD. Used only to build a historical distribution to
+    percentile-rank against — never to score a brand-new value that hasn't
+    been added to the window yet (see _robust_z_single for that)."""
+    if len(window) < 10:
+        return np.zeros(len(window))
+    median, mad = _robust_stats(window)
+    return 0.6745 * (np.array(window, dtype=float) - median) / mad
+
+def _robust_z_single(value: float, baseline_window: list[float]) -> float:
+    """Z-score of a NEW value against an EXISTING baseline that does not yet
+    contain it. Scoring a value against a baseline that already includes it
+    dilutes its own deviation — confirmed as a real, present bug during
+    development (independently found while merging upstream PR #19, which
+    fixed the identical issue in the previous mean/std-based detector: the
+    window was being updated before the z-score was computed against it,
+    so a genuine spike's own magnitude was baked into the very baseline it
+    was being measured against, understating detection sensitivity)."""
+    if len(baseline_window) < 10:
         return 0.0
-    current = abs(z_series[-1])
-    return round(float((np.abs(z_series[:-1]) < current).mean()), 2)
+    median, mad = _robust_stats(baseline_window)
+    return 0.6745 * (value - median) / mad
+
+def _percentile_confidence(current_z: float, historical_z_series: np.ndarray) -> float:
+    """How extreme is the current value compared to this endpoint's own
+    recent history? A real, explainable number — not a formula tuned to
+    just converge toward a fixed constant as more samples arrive."""
+    if len(historical_z_series) < 10:
+        return 0.0
+    current = abs(current_z)
+    return round(float((np.abs(historical_z_series) < current).mean()), 2)
 
 def _error_rate(window: list[float]) -> float:
     """Count ANY failed request (4xx + 5xx) — aligns with frontend liveStats."""
@@ -82,6 +103,21 @@ async def process_log_batch(sid: str, logs: list[dict]) -> list[dict]:
         lat_key = state.latency_key(sid, endpoint)
         err_key = state.error_key(sid, endpoint)
 
+        # Read the baseline BEFORE this batch is added — scoring a value
+        # against a window that already contains it dilutes its own
+        # deviation (see _robust_z_single's docstring).
+        latency_window_before = await state.get_window(lat_key)
+        error_window_before   = await state.get_window(err_key)
+
+        avg_latency = float(np.mean([l["latency_ms"] for l in batch]))
+        lat_z = _robust_z_single(avg_latency, latency_window_before)
+        lat_confidence = _percentile_confidence(lat_z, _robust_z_series(latency_window_before))
+
+        last_status = float(batch[-1]["status_code"])
+        err_z = _robust_z_single(last_status, error_window_before)
+        err_confidence = _percentile_confidence(err_z, _robust_z_series(error_window_before))
+
+        # NOW push this batch — it becomes part of the baseline for the next tick.
         for log in batch:
             await state.push_window(sid, lat_key, log["latency_ms"], endpoint)
             await state.push_window(sid, err_key, log["status_code"], endpoint)
@@ -89,20 +125,20 @@ async def process_log_batch(sid: str, logs: list[dict]) -> list[dict]:
         latency_window = await state.get_window(lat_key)
         error_window   = await state.get_window(err_key)
 
-        avg_latency = float(np.mean([l["latency_ms"] for l in batch]))
-        err_rate    = _error_rate(error_window)
+        # error_rate legitimately includes the current batch — "recent error
+        # rate" is a direct aggregate, not a self-referential baseline
+        # comparison, so there's no pollution concern here the way there is
+        # for the z-scores above.
+        err_rate = _error_rate(error_window)
 
-        # Push this tick's aggregate into the multivariate feature window
+        # Push this tick's aggregate into the multivariate feature window.
+        # Isolation Forest scores a point against a forest FIT ON that same
+        # window — fit-and-score-on-the-same-data is the standard, correct
+        # way to use it for outlier detection, not a pollution bug the way
+        # a static-baseline z-score comparison would be.
         await state.push_feature_row(sid, endpoint, [avg_latency, err_rate, float(len(batch))])
         feature_window = await state.get_feature_window(sid, endpoint)
         mv_score, mv_confidence = _multivariate_anomaly(feature_window)
-
-        lat_z_series = _robust_z_series(latency_window)
-        err_z_series = _robust_z_series(error_window)
-        lat_z = float(lat_z_series[-1]) if len(lat_z_series) else 0.0
-        err_z = float(err_z_series[-1]) if len(err_z_series) else 0.0
-        lat_confidence = _percentile_confidence(lat_z_series)
-        err_confidence = _percentile_confidence(err_z_series)
 
         # CUSUM on the per-tick AGGREGATED latency series (not raw per-request
         # values — confirmed via testing that raw per-request CUSUM is
