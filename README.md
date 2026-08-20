@@ -134,8 +134,8 @@ WebSocket Broadcast --> React Dashboard (real-time)
 
 ### 1. Clone
 ```bash
-git clone https://github.com/anshul23102/sentinel-api-intelligence.git
-cd sentinel-api-intelligence
+git clone https://github.com/anshul23102/sentinel.git
+cd sentinel
 ```
 
 ### 2. Backend
@@ -159,10 +159,50 @@ Open `http://localhost:5173`
 
 ---
 
+## Docker Quick Start
+
+### Prerequisites
+- Docker
+- Docker Compose
+- Optional: Groq API key at [console.groq.com](https://console.groq.com) for AI analysis
+
+### Build
+```bash
+docker compose build
+```
+
+### Run
+macOS/Linux:
+```bash
+GROQ_API_KEY=your_groq_api_key_here docker compose up
+```
+
+PowerShell:
+```powershell
+$env:GROQ_API_KEY="your_groq_api_key_here"; docker compose up
+```
+
+If you do not need AI analysis, you can run without the key:
+```bash
+docker compose up
+```
+
+### Stop
+```bash
+docker compose down
+```
+
+### URLs
+- Frontend: `http://localhost:5173`
+- Backend: `http://localhost:8000`
+- Backend API docs: `http://localhost:8000/docs`
+
+---
+
 ## Project Structure
 
 ```
-sentinel-api-intelligence/
+sentinel/
 +-- backend/
 |   +-- main.py              # FastAPI app, WebSocket manager, SSE streaming
 |   +-- anomaly_detector.py  # Z-score detection, health snapshot, scoring
@@ -170,7 +210,10 @@ sentinel-api-intelligence/
 |   +-- ai_agent.py          # Groq integration, streaming chat, root cause analysis
 |   +-- db.py                # PostgreSQL logs/anomalies via asyncpg, auto-pruning
 |   +-- state.py             # Redis-backed sliding windows, active anomalies, scenario state
+|   +-- config.py            # Env-configurable detection thresholds, validated on load
+|   +-- task_supervisor.py   # Background task supervisor with auto-restart + backoff
 |   +-- requirements.txt
+|   +-- tests/
 +-- frontend/
     +-- src/
         +-- pages/
@@ -202,6 +245,87 @@ CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 REQUIRE_API_KEY=          # optional — see "Rate Limiting & CORS" below
 ```
 
+### Anomaly Detection Thresholds
+
+The following environment variables control anomaly detection sensitivity.
+Defaults preserve the existing hardcoded behavior.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SENTINEL_ANOMALY_ZSCORE_THRESHOLD` | `2.5` | Z-score above which a latency spike is flagged |
+| `SENTINEL_ANOMALY_ERROR_RATE_THRESHOLD` | `0.15` | Error-rate fraction (0–1) above which an error surge is flagged |
+| `SENTINEL_ANOMALY_LATENCY_THRESHOLD_MS` | `250` | Minimum average latency (ms) to consider a spike |
+| `SENTINEL_ANOMALY_ZSCORE_CLEAR_THRESHOLD` | `1.5` | Z-score below which a resolved latency anomaly is cleared |
+| `SENTINEL_ANOMALY_ERROR_RATE_CLEAR_THRESHOLD` | `0.05` | Error-rate fraction below which a resolved error anomaly is cleared |
+
+Example:
+```
+SENTINEL_ANOMALY_ZSCORE_THRESHOLD=3.0
+SENTINEL_ANOMALY_ERROR_RATE_THRESHOLD=0.20
+```
+
+
+## Background Task Supervision
+
+Sentinel uses a production-quality **TaskSupervisor** to manage critical background tasks with automatic restart capability. This ensures monitoring continues even if tasks crash due to unexpected errors.
+
+### How It Works
+
+The supervisor manages two critical long-running tasks:
+
+1. **log_pipeline** - Generates synthetic logs, detects anomalies, and broadcasts updates via WebSocket
+2. **periodic_scan** - Runs anomaly scans every 5 seconds, broadcasts health snapshots, and prunes old database rows
+
+### Key Features
+
+- **Automatic Restart**: If a task crashes, it's automatically restarted without manual intervention
+- **Exponential Backoff**: After each failure, the restart delay increases exponentially (1s, 2s, 4s, 8s, ...) to prevent overwhelming a struggling system
+- **Maximum Backoff Cap**: Delays are capped at 60 seconds to balance recovery time with monitoring continuity
+- **Graceful Shutdown**: On application shutdown, all tasks are properly cancelled and awaited, preventing orphan tasks
+- **Structured Logging**: All lifecycle events (start, crash, restart, cancellation) are logged with structured messages
+
+### Configuration
+
+Backoff parameters are configurable via `SupervisorConfig`:
+
+- `initial_backoff` (default: 1.0s) - Initial delay before first restart
+- `max_backoff` (default: 60.0s) - Maximum restart delay
+- `backoff_multiplier` (default: 2.0) - Exponential growth factor
+- `jitter_factor` (default: 0.1) - Random jitter to prevent thundering herd
+
+### Health Monitoring
+
+The `/api/health` endpoint includes detailed supervision status:
+
+```json
+{
+  "monitoring": {
+    "log_pipeline_running": true,
+    "anomaly_detector_running": true,
+    "connected_websocket_clients": 3,
+    "last_monitoring_cycle": "2026-05-25T21:53:54",
+    "supervised_tasks": {
+      "log_pipeline": {
+        "running": true,
+        "restart_count": 0,
+        "current_backoff": 1.0,
+        "last_started": "2026-05-25T21:50:00",
+        "last_crashed": null
+      },
+      "periodic_scan": {
+        "running": true,
+        "restart_count": 2,
+        "current_backoff": 4.0,
+        "last_started": "2026-05-25T21:50:05",
+        "last_crashed": "2026-05-25T21:52:00"
+      }
+    }
+  }
+}
+```
+
+This provides visibility into task health, restart history, and current backoff state for operational monitoring.
+
 ---
 
 ## Rate Limiting & CORS
@@ -231,14 +355,14 @@ Coverage: pure-math unit tests for the detection algorithms (robust z-score, Iso
 
 ## Team
 
-| Name | Institute |
-|---|---|
-| Anshul Jain | Indraprastha Institute of Information Technology, Delhi |
+| Name | Institute | Team |
+|---|---|---|
+| Anshul Jain | Indraprastha Institute of Information Technology, Delhi | BLOODWYRM |
 
 ---
 
 <div align="center">
 
-Built for **CodeStorm 2026**
+Built for **Elite Coders Open Source Hackathon 2026**
 
 </div>

@@ -18,6 +18,27 @@ const FILTERS = ['all', 'critical', 'cascade_failure', 'latency_spike', 'error_s
 
 export default function Incidents({ anomalies, aiAnalyses }) {
   const [filter, setFilter] = useState('all')
+  const [showExportMenu, setShowExportMenu] = useState(false)
+
+  const handleExport = async (format) => {
+    setShowExportMenu(false)
+    try {
+      const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+      const res = await fetch(`${BACKEND}/api/incidents/export?format=${format}`)
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `sentinel_incidents.${format}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Export failed. Make sure the backend is running.')
+    }
+  }
 
   const filtered = filter === 'all' ? anomalies
     : filter === 'critical' ? anomalies.filter(a => a.severity === 'critical')
@@ -36,33 +57,33 @@ export default function Incidents({ anomalies, aiAnalyses }) {
 
       {/* Header */}
       <div style={{ marginBottom: 44, textAlign: 'center' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-35)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 14 }}>
           Observability
         </div>
         <h1 style={{
           fontSize: 48, fontWeight: 900, letterSpacing: '-2px', lineHeight: 1.1, marginBottom: 14,
-          background: 'linear-gradient(135deg, #ffffff 20%, #c4b5fd 55%, #67e8f9 100%)',
+          background: 'var(--heading-gradient)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
         }}>
           Incidents
         </h1>
-        <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.38)', lineHeight: 1.7, maxWidth: 420, margin: '0 auto' }}>
+        <p style={{ fontSize: 15, color: 'var(--text-38)', lineHeight: 1.7, maxWidth: 420, margin: '0 auto' }}>
           AI-diagnosed anomalies with root cause chains and actionable fix steps
         </p>
       </div>
 
       {/* Filter bar */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 28, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', letterSpacing: '0.7px', marginRight: 4 }}>Filter</span>
+        <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-22)', textTransform: 'uppercase', letterSpacing: '0.7px', marginRight: 4 }}>Filter</span>
         {FILTERS.map(f => {
           const active = filter === f
           const count  = counts[f]
           return (
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: '5px 13px', borderRadius: 20, fontSize: 11, fontWeight: active ? 600 : 400,
-              border:     `1px solid ${active ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.09)'}`,
-              background: active ? 'rgba(139,92,246,0.15)' : 'transparent',
-              color:      active ? '#c4b5fd' : 'rgba(255,255,255,0.42)',
+              border:     `1px solid ${active ? 'rgba(167,139,250,0.4)' : 'var(--text-09)'}`,
+              background: active ? 'var(--app-pill-border)' : 'transparent',
+              color:      active ? 'var(--p3)' : 'var(--text-42)',
               cursor: 'pointer', transition: 'all 0.15s',
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
@@ -70,31 +91,82 @@ export default function Incidents({ anomalies, aiAnalyses }) {
               {count > 0 && (
                 <span style={{
                   fontSize: 9, fontWeight: 700, minWidth: 16, height: 16, borderRadius: 8,
-                  background: active ? 'rgba(196,181,253,0.25)' : 'rgba(255,255,255,0.1)',
-                  color: active ? '#ddd6fe' : 'rgba(255,255,255,0.5)',
+                  background: active ? 'rgba(196,181,253,0.25)' : 'var(--text-10)',
+                  color: active ? '#ddd6fe' : 'var(--text-50)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
                 }}>{count}</span>
               )}
             </button>
           )
         })}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'rgba(255,255,255,0.2)' }}>
-          {filtered.length} incident{filtered.length !== 1 ? 's' : ''}
-        </span>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}>
+          <button
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: showExportMenu ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.08)',
+              border: '1px solid rgba(139,92,246,0.35)',
+              color: '#c4b5fd', cursor: 'pointer', transition: 'all 0.18s', letterSpacing: '0.3px',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(139,92,246,0.2)'}
+            onMouseLeave={e => e.currentTarget.style.background = showExportMenu ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.08)'}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="2.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="2.5"
+              style={{ transform: showExportMenu ? 'rotate(180deg)' : 'none', transition: '0.2s' }}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+
+          {showExportMenu && (
+            <div style={{
+              position: 'absolute', top: '40px', right: 0,
+              background: 'var(--app-bg)', border: '1px solid var(--bg-10)',
+              borderRadius: 8, padding: 8,
+              display: 'flex', flexDirection: 'column', gap: 6, zIndex: 100,
+            }}>
+              <button onClick={() => handleExport('csv')} style={{
+                padding: '6px 14px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)',
+                color: '#c4b5fd', cursor: 'pointer',
+              }}>
+                CSV
+              </button>
+              <button onClick={() => handleExport('json')} style={{
+                padding: '6px 14px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)',
+                color: '#c4b5fd', cursor: 'pointer', width: '100%',
+              }}>
+                JSON
+              </button>
+            </div>
+          )}
+
+          <span style={{ fontSize: 11, color: 'var(--text-20)' }}>
+            {filtered.length} incident{filtered.length !== 1 ? 's' : ''}
+          </span>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
         <div style={{
           padding: '64px 48px', borderRadius: 16, textAlign: 'center',
-          background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.08)',
+          background: 'var(--bg-025)', border: '1px solid var(--bg-08)',
         }}>
           <div style={{ fontSize: 28, marginBottom: 16, opacity: 0.5 }}>✦</div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: 'rgba(255,255,255,0.5)', marginBottom: 10 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-42)', marginBottom: 10 }}>
             {filter === 'all' ? 'No incidents detected' : `No ${filter} incidents`}
           </div>
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', lineHeight: 1.8, maxWidth: 340, margin: '0 auto' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-30)', lineHeight: 1.8, maxWidth: 340, margin: '0 auto' }}>
             Inject a failure from the Overview page to see AI diagnosis in action.
-            Try <span style={{ color: '#c4b5fd', fontWeight: 600 }}>"DB Slowdown"</span> — incidents appear within 5 seconds.
+            Try <span style={{ color: 'var(--p3)', fontWeight: 600 }}>"DB Slowdown"</span> — incidents appear within 5 seconds.
           </div>
         </div>
       ) : (
@@ -125,9 +197,9 @@ function CopyButton({ text }) {
   return (
     <button onClick={copy} style={{
       padding: '3px 10px', borderRadius: 8, fontSize: 10, fontWeight: 600,
-      border: `1px solid ${copied ? 'rgba(52,211,153,0.35)' : 'rgba(255,255,255,0.1)'}`,
-      background: copied ? 'rgba(52,211,153,0.1)' : 'rgba(255,255,255,0.04)',
-      color: copied ? '#6ee7b7' : 'rgba(255,255,255,0.4)',
+      border: `1px solid ${copied ? 'rgba(52,211,153,0.35)' : 'var(--text-10)'}`,
+      background: copied ? 'rgba(52,211,153,0.1)' : 'var(--bg-04)',
+      color: copied ? '#6ee7b7' : 'var(--text-40)',
       cursor: 'pointer', transition: 'all 0.18s', flexShrink: 0,
     }}>
       {copied ? 'Copied!' : 'Copy'}
@@ -142,9 +214,9 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
 
   return (
     <div style={{
-      background: open ? `${sevStyle.bg}` : 'rgba(255,255,255,0.025)',
-      border: `1px solid ${open ? sevStyle.border : 'rgba(255,255,255,0.08)'}`,
-      borderLeft: `3px solid ${open ? sevStyle.dot : 'rgba(255,255,255,0.1)'}`,
+      background: open ? `${sevStyle.bg}` : 'var(--bg-025)',
+      border: `1px solid ${open ? sevStyle.border : 'var(--text-08)'}`,
+      borderLeft: `3px solid ${open ? sevStyle.dot : 'var(--text-10)'}`,
       borderRadius: 14, overflow: 'hidden',
       transition: 'all 0.22s ease',
       animation: `fadeUp 0.38s ease ${index * 0.04}s both`,
@@ -179,7 +251,7 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
         {/* Endpoint */}
         <span style={{
           fontSize: 12, fontFamily: "'JetBrains Mono', monospace",
-          color: 'rgba(255,255,255,0.7)', flexShrink: 0,
+          color: 'var(--text-70)', flexShrink: 0,
           cursor: 'text',
         }}
           onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(anomaly.endpoint) }}
@@ -189,17 +261,17 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
         </span>
 
         {/* Description */}
-        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 12, color: 'var(--text-40)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {anomaly.description}
         </span>
 
         {/* Time */}
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', flexShrink: 0, fontFamily: 'monospace' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-25)', flexShrink: 0, fontFamily: 'monospace' }}>
           {anomaly.detected_at?.slice(11, 19)}
         </span>
 
         {/* Chevron */}
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2"
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-30)" strokeWidth="2"
           style={{ transform: open ? 'rotate(180deg)' : 'none', transition: '0.22s', flexShrink: 0 }}>
           <polyline points="6 9 12 15 18 9" />
         </svg>
@@ -212,7 +284,7 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
           {/* Root cause chain */}
           {anomaly.root_cause_chain?.length > 0 && (
             <div style={{ marginBottom: 20 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.9px', marginBottom: 12 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-30)', textTransform: 'uppercase', letterSpacing: '0.9px', marginBottom: 12 }}>
                 Root Cause Chain
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -222,12 +294,12 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{
-                        background: 'rgba(255,255,255,0.04)',
-                        border: '1px solid rgba(255,255,255,0.1)',
+                        background: 'var(--bg-04)',
+                        border: '1px solid var(--text-10)',
                         borderRadius: 10, padding: '10px 14px',
                       }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.88)', marginBottom: 3 }}>{step.component}</div>
-                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 6 }}>{step.signal}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-88)', marginBottom: 3 }}>{step.component}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-45)', marginBottom: 6 }}>{step.signal}</div>
                         <div style={{
                           fontSize: 10, color: confColor, fontWeight: 700,
                           background: `${confColor}18`, border: `1px solid ${confColor}33`,
@@ -235,7 +307,7 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
                         }}>{conf}% confidence</div>
                       </div>
                       {i < anomaly.root_cause_chain.length - 1 && (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-20)" strokeWidth="2">
                           <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
                         </svg>
                       )}
@@ -264,8 +336,8 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                   </svg>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>AI Diagnosis</span>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', marginRight: 'auto' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-85)' }}>AI Diagnosis</span>
+                <span style={{ fontSize: 10, color: 'var(--text-28)', marginRight: 'auto' }}>
                   {analysis.analyzed_at?.slice(11, 19)} · {analysis.model?.split('-')[0]}
                 </span>
                 <CopyButton text={analysis.analysis} />
@@ -276,8 +348,8 @@ function IncidentCard({ anomaly, analysis, open: defaultOpen, index }) {
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10,
               padding: '13px 16px', borderRadius: 12,
-              background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.08)',
-              fontSize: 13, color: 'rgba(255,255,255,0.4)',
+              background: 'var(--bg-025)', border: '1px solid var(--text-08)',
+              fontSize: 13, color: 'var(--text-40)',
             }}>
               <div style={{
                 width: 14, height: 14, borderRadius: '50%',

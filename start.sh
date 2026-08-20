@@ -36,3 +36,4 @@ echo "Press Ctrl+C to stop both servers"
 
 trap "kill $BACKEND_PID $FRONTEND_PID; exit" INT
 wait
+

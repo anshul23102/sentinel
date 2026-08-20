@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 from groq import AsyncGroq
-from db import get_recent_logs, get_endpoint_stats, get_recent_anomalies
+from db import get_endpoint_stats, get_recent_anomalies
 from anomaly_detector import get_health_snapshot
 from prompt_guard import wrap_if_suspicious, SYSTEM_PROMPT_ADDENDUM
 
@@ -14,7 +14,7 @@ from prompt_guard import wrap_if_suspicious, SYSTEM_PROMPT_ADDENDUM
 # moving parts, so it replaced that approach entirely.
 _api_key = os.environ.get("GROQ_API_KEY", "")
 client = AsyncGroq(api_key=_api_key) if _api_key else None
-MODEL = "openai/gpt-oss-120b"
+MODEL = "openai/gpt-oss-120b"  # llama-3.3-70b-versatile was retired by Groq — see README/commit history
 
 def _get_client():
     global client, _api_key
@@ -99,6 +99,24 @@ Be specific to this anomaly — reference actual numbers from the logs. Under 25
         "model": MODEL,
     }
 
+def _clean_history(conversation_history: list[dict]) -> list[dict]:
+    """Keep only well-formed {role, content} items from the last 8 turns.
+
+    `ChatRequest.history` is typed `list[dict]`, so Pydantic accepts arbitrary
+    dicts; indexing `msg["role"]`/`msg["content"]` on a malformed item raised a
+    KeyError that surfaced as an unhandled 500. Skip anything that isn't a dict
+    with string role+content so one bad entry can't crash the request (#70).
+    """
+    cleaned = []
+    for msg in (conversation_history or [])[-8:]:
+        if not isinstance(msg, dict):
+            continue
+        role, content = msg.get("role"), msg.get("content")
+        if isinstance(role, str) and isinstance(content, str):
+            cleaned.append({"role": role, "content": content})
+    return cleaned
+
+
 async def chat_stream(sid: str, message: str, conversation_history: list[dict]):
     """Streaming version — yields text chunks as they arrive from Groq."""
     health          = await get_health_snapshot(sid)
@@ -108,8 +126,7 @@ async def chat_stream(sid: str, message: str, conversation_history: list[dict]):
     system_with_context = _build_system_with_context(health, recent_anomalies, stats)
 
     messages = [{"role": "system", "content": system_with_context}]
-    for msg in conversation_history[-8:]:
-        messages.append({"role": msg["role"], "content": msg["content"]})
+    messages.extend(_clean_history(conversation_history))
     messages.append({"role": "user", "content": wrap_if_suspicious(message)})
 
     c = _get_client()
@@ -145,8 +162,7 @@ async def chat(sid: str, message: str, conversation_history: list[dict]) -> str:
     messages = [{"role": "system", "content": system_with_context}]
 
     # Replay conversation history with clean messages (no embedded context blobs)
-    for msg in conversation_history[-8:]:
-        messages.append({"role": msg["role"], "content": msg["content"]})
+    messages.extend(_clean_history(conversation_history))
 
     # Current user message — just the raw text, no context injected here
     messages.append({"role": "user", "content": wrap_if_suspicious(message)})
@@ -192,14 +208,17 @@ Keep it engineering-focused, under 400 words."""
     return await _generate(prompt, max_tokens=800)
 
 def _summarize_logs(logs: list[dict], endpoint: str) -> dict:
-    endpoint_logs = [l for l in logs if l["endpoint"] == endpoint]
+    endpoint_logs = [entry for entry in logs if entry["endpoint"] == endpoint]
     if not endpoint_logs:
         return {"message": "No logs found for this endpoint"}
 
     total = len(endpoint_logs)
-    errors = [l for l in endpoint_logs if l["status_code"] >= 500]
-    latencies = [l["latency_ms"] for l in endpoint_logs]
-    error_msgs = list({l["error_message"] for l in errors if l.get("error_message")})[:5]
+    # Count any failure (>= 400), matching the anomaly detector's error-surge
+    # threshold. Counting only >= 500 handed the LLM "error_count: 0" during
+    # 4xx surges (e.g. 429 rate-limit cascades) it was asked to diagnose.
+    errors = [entry for entry in endpoint_logs if entry["status_code"] >= 400]
+    latencies = [entry["latency_ms"] for entry in endpoint_logs]
+    error_msgs = list({entry["error_message"] for entry in errors if entry.get("error_message")})[:5]
 
     return {
         "total_requests": total,
@@ -217,3 +236,4 @@ def _count_by(items: list[dict], key: str) -> dict:
         val = str(item.get(key, "unknown"))
         counts[val] = counts.get(val, 0) + 1
     return dict(sorted(counts.items()))
+

@@ -133,17 +133,17 @@ export default function Assistant({ getIncidentReport, anomalies }) {
       {/* Header */}
       <div style={{
         padding: '40px 60px 22px',
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        borderBottom: '1px solid var(--text-07)',
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: msgs.length <= 1 ? 22 : 0 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-38)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10 }}>
               AI Assistant
             </div>
             <h1 style={{
               fontSize: 34, fontWeight: 900, letterSpacing: '-1px',
-              background: 'linear-gradient(135deg, #ffffff 40%, #c4b5fd 100%)',
+              background: 'var(--heading-gradient)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
             }}>
               Sentinel AI
@@ -152,8 +152,8 @@ export default function Assistant({ getIncidentReport, anomalies }) {
           <div style={{
             display: 'flex', alignItems: 'center', gap: 7,
             padding: '8px 14px', borderRadius: 20,
-            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-            fontSize: 12, color: 'rgba(255,255,255,0.5)', flexShrink: 0,
+            background: 'var(--app-card-bg)', border: '1px solid var(--text-10)',
+            fontSize: 12, color: 'var(--text-50)', flexShrink: 0,
           }}>
             <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#a78bfa', animation: 'pulse 2s infinite', boxShadow: '0 0 8px rgba(167,139,250,0.9)' }} />
             Live · {anomalies.length} anomalies
@@ -166,12 +166,12 @@ export default function Assistant({ getIncidentReport, anomalies }) {
             {STARTERS.map(s => (
               <button key={s} onClick={() => send(s)} style={{
                 padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 500,
-                border: '1px solid rgba(255,255,255,0.1)',
-                background: 'rgba(255,255,255,0.04)',
-                color: 'rgba(255,255,255,0.55)', cursor: 'pointer', transition: 'all 0.16s',
+                border: '1px solid var(--text-10)',
+                background: 'var(--bg-04)',
+                color: 'var(--text-55)', cursor: 'pointer', transition: 'all 0.16s',
               }}
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(139,92,246,0.12)'; e.currentTarget.style.borderColor = 'rgba(167,139,250,0.3)'; e.currentTarget.style.color = '#c4b5fd' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'rgba(255,255,255,0.55)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-04)'; e.currentTarget.style.borderColor = 'var(--text-10)'; e.currentTarget.style.color = 'var(--text-55)' }}
               >{s}</button>
             ))}
           </div>
@@ -188,7 +188,7 @@ export default function Assistant({ getIncidentReport, anomalies }) {
       {/* Input */}
       <div style={{
         padding: '14px 60px 32px',
-        borderTop: '1px solid rgba(255,255,255,0.07)',
+        borderTop: '1px solid var(--text-07)',
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', gap: 10, maxWidth: 820 }}>
@@ -200,15 +200,15 @@ export default function Assistant({ getIncidentReport, anomalies }) {
             disabled={streaming}
             style={{
               flex: 1,
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.11)',
+              background: 'var(--app-card-bg)',
+              border: '1px solid var(--text-10)',
               borderRadius: 12, padding: '14px 18px',
-              fontSize: 14, color: 'white', outline: 'none',
+              fontSize: 14, color: 'var(--app-text)', outline: 'none',
               transition: 'border-color 0.18s',
               opacity: streaming ? 0.5 : 1,
             }}
             onFocus={e => e.target.style.borderColor = 'rgba(167,139,250,0.45)'}
-            onBlur={e  => e.target.style.borderColor = 'rgba(255,255,255,0.11)'}
+            onBlur={e  => e.target.style.borderColor = 'var(--text-10)'}
           />
           {streaming ? (
             <button
@@ -228,9 +228,9 @@ export default function Assistant({ getIncidentReport, anomalies }) {
               style={{
                 padding: '0 24px', height: 48, borderRadius: 12, border: 'none', flexShrink: 0,
                 background: loading || !input.trim()
-                  ? 'rgba(255,255,255,0.06)'
+                  ? 'var(--text-06)'
                   : 'linear-gradient(135deg, #8b5cf6, #a78bfa)',
-                color: loading || !input.trim() ? 'rgba(255,255,255,0.25)' : 'white',
+                color: loading || !input.trim() ? 'var(--text-25)' : 'white',
                 fontSize: 13, fontWeight: 600,
                 cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
                 transition: 'all 0.16s',
@@ -239,7 +239,7 @@ export default function Assistant({ getIncidentReport, anomalies }) {
             >Send</button>
           )}
         </div>
-        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', marginTop: 10 }}>
+        <p style={{ fontSize: 11, color: 'var(--text-28)', marginTop: 10 }}>
           Powered by GPT-OSS 120B via Groq · Press Enter to send
         </p>
       </div>
@@ -270,14 +270,14 @@ function Bubble({ m, isLast }) {
         </div>
       )}
       <div style={{ maxWidth: '80%' }}>
-        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginBottom: 6, textAlign: isUser ? 'right' : 'left' }}>
+        <p style={{ fontSize: 11, color: 'var(--text-30)', marginBottom: 6, textAlign: isUser ? 'right' : 'left' }}>
           {isUser ? 'You' : 'Sentinel'} · {m.ts?.slice(11, 19)}
         </p>
         <div style={{
           background: isUser
             ? 'linear-gradient(135deg, #8b5cf6, #a78bfa)'
-            : 'rgba(255,255,255,0.05)',
-          border: isUser ? 'none' : '1px solid rgba(255,255,255,0.1)',
+            : 'var(--app-card-bg)',
+          border: isUser ? 'none' : '1px solid var(--text-10)',
           borderRadius: isUser ? '14px 14px 3px 14px' : '3px 14px 14px 14px',
           padding: '13px 17px',
           boxShadow: isUser ? '0 4px 20px rgba(139,92,246,0.22)' : 'none',
@@ -320,7 +320,7 @@ function Thinking() {
       </div>
       <div style={{ marginTop: 22 }}>
         <div style={{
-          background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+          background: 'var(--app-card-bg)', border: '1px solid var(--text-10)',
           borderRadius: '3px 14px 14px 14px', padding: '14px 18px',
           display: 'flex', gap: 5, alignItems: 'center',
         }}>

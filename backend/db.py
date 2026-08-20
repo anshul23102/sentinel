@@ -92,6 +92,13 @@ def _cutoff(minutes: int) -> str:
     """Compute the ISO timestamp cutoff in Python, not SQL — keeps queries DB-agnostic."""
     return (datetime.now(timezone.utc) - timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%S")
 
+# Bounds for user-supplied query params, clamped here at the shared DB
+# boundary rather than per-handler so every caller is protected: an
+# unbounded LIMIT would dump the whole table, and a negative `minutes`
+# produces a cutoff that never matches, silently returning [].
+MAX_ROW_LIMIT = 1000
+MAX_WINDOW_MINUTES = 1440  # 24h
+
 async def bulk_insert_logs(session_id: str, logs: list[dict]):
     """Insert multiple logs in a single transaction for performance."""
     async with _pool.acquire() as conn:
@@ -122,6 +129,7 @@ async def insert_anomaly(session_id: str, anomaly: dict) -> int:
         return row["id"]
 
 async def get_recent_logs(session_id: str, limit: int = 200, endpoint: str = None):
+    limit = max(1, min(limit, MAX_ROW_LIMIT))
     async with _pool.acquire() as conn:
         if endpoint:
             rows = await conn.fetch(
@@ -135,6 +143,7 @@ async def get_recent_logs(session_id: str, limit: int = 200, endpoint: str = Non
         return [dict(r) for r in rows]
 
 async def get_recent_anomalies(session_id: str, limit: int = 20):
+    limit = max(1, min(limit, MAX_ROW_LIMIT))
     async with _pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT * FROM anomalies WHERE session_id = $1 ORDER BY detected_at DESC LIMIT $2", session_id, limit
@@ -150,6 +159,7 @@ async def get_recent_anomalies(session_id: str, limit: int = 20):
         return result
 
 async def get_endpoint_stats(session_id: str, minutes: int = 5):
+    minutes = max(1, min(minutes, MAX_WINDOW_MINUTES))
     async with _pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT
@@ -172,7 +182,17 @@ async def prune_old_logs(session_id: str, minutes: int = 15):
     async with _pool.acquire() as conn:
         await conn.execute("DELETE FROM logs WHERE session_id = $1 AND timestamp < $2", session_id, _cutoff(minutes))
 
+async def prune_old_anomalies(session_id: str, minutes: int = 1440):
+    """The anomalies table grows on every state transition and was never
+    pruned on its own — session reaping handles abandoned sessions, but a
+    long-lived session's anomaly history would otherwise grow unbounded.
+    Default retention (24h) is far longer than logs since anomalies are
+    sparse and are the incident record, not high-volume raw data."""
+    async with _pool.acquire() as conn:
+        await conn.execute("DELETE FROM anomalies WHERE session_id = $1 AND detected_at < $2", session_id, _cutoff(minutes))
+
 async def get_timeseries(session_id: str, minutes: int = 10):
+    minutes = max(1, min(minutes, MAX_WINDOW_MINUTES))
     async with _pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT

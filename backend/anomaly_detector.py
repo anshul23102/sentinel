@@ -6,14 +6,20 @@ from db import insert_anomaly, get_seasonal_history
 from log_generator import BUCKETS_PER_DAY
 from seasonal import holt_linear_forecast, fit_seasonal_baseline, cusum_changepoint
 import state
+from config import (
+    ANOMALY_ZSCORE_THRESHOLD as MAD_Z_THRESHOLD,
+    ANOMALY_ZSCORE_CLEAR_THRESHOLD as MAD_Z_CLEAR_THRESHOLD,
+    ANOMALY_ERROR_RATE_THRESHOLD as ERROR_RATE_THRESHOLD,
+    ANOMALY_ERROR_RATE_CLEAR_THRESHOLD as ERROR_RATE_CLEAR_THRESHOLD,
+    ANOMALY_LATENCY_THRESHOLD_MS,
+)
 
-# MAD_Z_THRESHOLD: 3.5 is the standard cutoff for the modified z-score
-# (Iglewicz & Hoaglin, "How to Detect and Handle Outliers", 1993) — chosen
-# specifically over the classic mean/std z-score because a robust median/MAD
-# baseline doesn't get dragged off-center by the very anomalies it's trying
-# to detect, whereas mean/std does.
-MAD_Z_THRESHOLD        = 3.5
-ERROR_RATE_THRESHOLD   = 0.15   # absolute floor — keeps quiet, low-traffic endpoints from false-alarming on noise
+# MAD_Z_THRESHOLD default (3.5) is the standard cutoff for the modified
+# z-score (Iglewicz & Hoaglin, "How to Detect and Handle Outliers", 1993) —
+# chosen specifically over the classic mean/std z-score because a robust
+# median/MAD baseline doesn't get dragged off-center by the very anomalies
+# it's trying to detect, whereas mean/std does. All five thresholds below
+# are env-configurable via config.py (SENTINEL_ANOMALY_* env vars).
 ISOLATION_MIN_SAMPLES  = 15     # need enough history before the multivariate model means anything
 PREDICTION_WINDOW      = 5      # seconds ahead to project
 
@@ -161,7 +167,7 @@ async def process_log_batch(sid: str, logs: list[dict]) -> list[dict]:
         anomalies_for_ep = []
 
         # Latency spike detection — robust z-score, not mean/std
-        if lat_z > MAD_Z_THRESHOLD and avg_latency > 250:
+        if lat_z > MAD_Z_THRESHOLD and avg_latency > ANOMALY_LATENCY_THRESHOLD_MS:
             key = f"latency_{endpoint}"
             if await state.get_active_anomaly(sid, key) is None:
                 predicted_latency = holt_linear_forecast(latency_window, PREDICTION_WINDOW)
@@ -180,7 +186,7 @@ async def process_log_batch(sid: str, logs: list[dict]) -> list[dict]:
                 }
                 await state.set_active_anomaly(sid, key, anomaly)
                 anomalies_for_ep.append(anomaly)
-            elif lat_z < 1.5:
+            elif lat_z < MAD_Z_CLEAR_THRESHOLD:
                 await state.clear_active_anomaly(sid, key)
 
         # Error rate surge detection — absolute floor kept (this is what stops
@@ -206,7 +212,7 @@ async def process_log_batch(sid: str, logs: list[dict]) -> list[dict]:
                 }
                 await state.set_active_anomaly(sid, key, anomaly)
                 anomalies_for_ep.append(anomaly)
-            elif err_rate < 0.05:
+            elif err_rate < ERROR_RATE_CLEAR_THRESHOLD:
                 await state.clear_active_anomaly(sid, key)
 
         # Changepoint detection — only raised when latency/error-surge didn't

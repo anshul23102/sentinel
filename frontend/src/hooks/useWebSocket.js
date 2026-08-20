@@ -33,6 +33,7 @@ export function useWebSocket() {
   const demoTimer = useRef(null)
   const demoLoop  = useRef(null)
   const isMock    = useRef(false)
+  const isPageVisible = useRef(!document.hidden)
 
   const [connected,       setConnected]       = useState(false)
   const [demoMode,        setDemoMode]        = useState(false)
@@ -59,6 +60,7 @@ export function useWebSocket() {
 
     // Tick every second
     demoLoop.current = setInterval(() => {
+      if (!isPageVisible.current) {return}
       const batch   = generateLogBatch(30)
       const buf     = [...batch, ...logBuffer.current].slice(0, 180)
       logBuffer.current = buf
@@ -99,7 +101,7 @@ export function useWebSocket() {
 
   // ── Real backend fetch ────────────────────────────────────────────────────
   const fetchTimeseries = useCallback(async () => {
-    if (isMock.current) return
+    if (isMock.current || !isPageVisible.current) return
     try {
       const r    = await fetch(`${API_URL}/api/timeseries?minutes=5`, { headers: { 'X-Session-Id': SESSION_ID } })
       const data = await r.json()
@@ -115,13 +117,18 @@ export function useWebSocket() {
 
   // ── WebSocket connection ──────────────────────────────────────────────────
   useEffect(() => {
+    const handleVisibilityChange = () => {isPageVisible.current = !document.hidden}
+
     function connect() {
       const socket = new WebSocket(WS_URL)
       ws.current = socket
 
       socket.onopen = () => {
         // Real backend connected — cancel demo fallback and stop mock if running
-        clearTimeout(demoTimer.current)
+        if (demoTimer.current) {
+          clearTimeout(demoTimer.current)
+          demoTimer.current = null
+        }
         stopDemoMode()
         setConnected(true)
         fetchTimeseries()
@@ -131,8 +138,12 @@ export function useWebSocket() {
         setConnected(false)
         if (!isMock.current) {
           // Schedule demo fallback if not already running
-          clearTimeout(demoTimer.current)
-          demoTimer.current = setTimeout(startDemoMode, DEMO_FALLBACK_MS)
+          if (!demoTimer.current) {
+            demoTimer.current = setTimeout(() => {
+              startDemoMode()
+              demoTimer.current = null
+            }, DEMO_FALLBACK_MS)
+          }
           setTimeout(connect, 2000)
         }
       }
@@ -196,14 +207,23 @@ export function useWebSocket() {
     }
 
     // Start connection attempt immediately, demo fallback fires after DEMO_FALLBACK_MS
-    demoTimer.current = setTimeout(startDemoMode, DEMO_FALLBACK_MS)
+    demoTimer.current = setTimeout(() => {
+      startDemoMode()
+      demoTimer.current = null
+    }, DEMO_FALLBACK_MS)
     connect()
+
+    document.addEventListener("visibilitychange",handleVisibilityChange)
 
     const interval = setInterval(fetchTimeseries, 10000)
     return () => {
+      document.removeEventListener("visibilitychange",handleVisibilityChange)
       ws.current?.close()
       clearInterval(interval)
-      clearTimeout(demoTimer.current)
+      if (demoTimer.current) {
+        clearTimeout(demoTimer.current)
+        demoTimer.current = null
+      }
       clearInterval(demoLoop.current)
     }
   }, [fetchTimeseries, startDemoMode, stopDemoMode])
@@ -239,8 +259,8 @@ export function useWebSocket() {
         normal:        'All systems are healthy. Latency is nominal at ~80ms, error rate below 1%. No active incidents.',
         db_slowdown:   'Root cause: database connection pool exhausted. Auth service is queuing 28 connections against a pool of 10. Cascade path: Auth (500ms) → Cart (timeouts) → Checkout (503s). Recommend: increase pool size and add circuit breaker.',
         memory_leak:   'Memory leak detected on search service. Heap growing ~12MB/min. GC pauses causing latency spikes. Restart the service immediately and cap the in-memory product cache.',
-        rate_limit:    'Rate limit cascade: auth returning 429s from a traffic spike. All login-dependent services are stalled. Block the source subnet in WAF and temporarily raise rate limit for internal services.',
-        net_partition: 'Network partition in us-east-1b AZ. Inventory is unreachable causing 65% cart failures. Reroute traffic to us-east-1a replica and enable stale-read fallback.',
+        rate_limit_cascade:    'Rate limit cascade: auth returning 429s from a traffic spike. All login-dependent services are stalled. Block the source subnet in WAF and temporarily raise rate limit for internal services.',
+        network_partition: 'Network partition in us-east-1b AZ. Inventory is unreachable causing 65% cart failures. Reroute traffic to us-east-1a replica and enable stale-read fallback.',
       }
       return { response: responses[scenario] || responses.normal }
     }

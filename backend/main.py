@@ -1,4 +1,6 @@
 import asyncio
+import csv
+import io
 import json
 import os
 import time
@@ -14,15 +16,27 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs, upsert_seasonal_bucket, delete_session_data
+from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs, prune_old_anomalies, upsert_seasonal_bucket, delete_session_data
 from log_generator import run_generator, set_scenario, get_current_scenario, SCENARIOS, SIM_DAY_SECONDS, BUCKETS_PER_DAY
 from anomaly_detector import process_log_batch, get_health_snapshot, run_anomaly_scan
 from ai_agent import analyze_anomaly, chat, chat_stream, generate_incident_report
 from ratelimit import rate_limit, require_api_key
+from task_supervisor import TaskSupervisor, SupervisorConfig
 import session_manager
 import state
 
 BUCKET_SECONDS = SIM_DAY_SECONDS // BUCKETS_PER_DAY
+
+# One supervisor for every session's background tasks — register()/start_task()
+# per session with a unique name, stop_task() on reap. Auto-restarts a crashed
+# log_pipeline/periodic_scan with exponential backoff instead of leaving that
+# session's simulated world silently dead until the whole process restarts.
+supervisor = TaskSupervisor(SupervisorConfig(initial_backoff=1.0, max_backoff=60.0, backoff_multiplier=2.0))
+
+# Per-session "did the pipeline actually complete a cycle recently" — surfaced
+# on /api/health so a stuck-but-not-crashed pipeline is visible, not just a
+# crashed one (which the supervisor's own status already covers).
+_last_monitoring_cycle: dict[str, float] = {}
 
 # WebSocket connection manager — keyed by session, so a broadcast for one
 # visitor's simulated world only ever reaches that visitor's own tabs.
@@ -76,9 +90,13 @@ async def get_session_id(x_session_id: Optional[str] = Header(None)) -> str:
 
 async def _ensure_session(sid: str):
     async def _start() -> list[asyncio.Task]:
+        supervisor.register(f"log_pipeline:{sid}", lambda: log_pipeline(sid))
+        supervisor.register(f"periodic_scan:{sid}", lambda: periodic_scan(sid))
+        await supervisor.start_task(f"log_pipeline:{sid}")
+        await supervisor.start_task(f"periodic_scan:{sid}")
         return [
-            asyncio.create_task(log_pipeline(sid)),
-            asyncio.create_task(periodic_scan(sid)),
+            supervisor._tasks[f"log_pipeline:{sid}"].task,
+            supervisor._tasks[f"periodic_scan:{sid}"].task,
         ]
     await session_manager.ensure_running(sid, _start)
 
@@ -122,9 +140,13 @@ async def periodic_scan(sid: str):
         await run_anomaly_scan(sid, lambda m: manager.broadcast(sid, m))
         health = await get_health_snapshot(sid)
         await manager.broadcast(sid, {"type": "health", "data": health})
-        # Prune logs older than 15 minutes every 60s to keep DB lean
+        _last_monitoring_cycle[sid] = time.time()
+        # Prune old rows every 60s to keep the DB lean: logs (15 min) and
+        # the anomalies table (24h), which otherwise grows unbounded for
+        # any session that stays alive longer than the reaper's idle timeout.
         if tick % 12 == 0:
             await prune_old_logs(sid, minutes=15)
+            await prune_old_anomalies(sid, minutes=1440)
 
         # Record the current bucket from the actual per-tick feature window,
         # not the health snapshot's rolling-window sample_size — that caps at
@@ -138,13 +160,22 @@ async def periodic_scan(sid: str):
 
 async def _cleanup_session(sid: str):
     print(f"[session] reaping idle session {sid}", flush=True)
+    # session_manager's reaper already cancelled the raw tasks directly —
+    # this just unregisters them from the supervisor too, so a reaped
+    # session's entries don't linger in supervisor._tasks forever.
+    await supervisor.stop_task(f"log_pipeline:{sid}")
+    await supervisor.stop_task(f"periodic_scan:{sid}")
+    _last_monitoring_cycle.pop(sid, None)
     await delete_session_data(sid)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     asyncio.create_task(session_manager.reaper_loop(_cleanup_session))
-    yield
+    try:
+        yield
+    finally:
+        await supervisor.shutdown()
 
 app = FastAPI(title="Sentinel — API Intelligence Platform", lifespan=lifespan)
 
@@ -162,7 +193,16 @@ app.add_middleware(
 # REST endpoints
 @app.get("/api/health")
 async def health(sid: str = Depends(get_session_id)):
-    return await get_health_snapshot(sid)
+    health_data = dict(await get_health_snapshot(sid))
+    pipeline_status = supervisor.get_task_status(f"log_pipeline:{sid}")
+    scan_status     = supervisor.get_task_status(f"periodic_scan:{sid}")
+    health_data["_monitoring"] = {
+        "connected_websocket_clients": len(manager.active.get(sid, [])),
+        "last_monitoring_cycle": _last_monitoring_cycle.get(sid),
+        "log_pipeline_running": pipeline_status.get("running", False),
+        "anomaly_detector_running": scan_status.get("running", False),
+    }
+    return health_data
 
 @app.get("/api/logs")
 async def logs(limit: int = 100, endpoint: Optional[str] = None, sid: str = Depends(get_session_id)):
@@ -240,6 +280,40 @@ async def incident_report(sid: str = Depends(get_session_id)):
         return {"report": "No anomalies detected in the current monitoring window."}
     report = await generate_incident_report(anomalies_data, 10)
     return {"report": report}
+
+@app.get("/api/incidents/export")
+async def export_incidents(format: str = "csv", limit: int = 1000, sid: str = Depends(get_session_id)):
+    # Bound the export so it can't materialize an unbounded result — same
+    # clamp db.py applies at the query boundary, enforced again here since
+    # `limit` is a raw query param.
+    limit = max(1, min(limit, 10000))
+    incidents = await get_recent_anomalies(sid, limit)
+
+    if format.lower() == "json":
+        content = json.dumps(incidents, indent=2, default=str)
+        return StreamingResponse(
+            io.StringIO(content),
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=sentinel_incidents.json"},
+        )
+
+    output = io.StringIO()
+    if incidents:
+        # root_cause_chain is a list (already parsed by get_recent_anomalies)
+        # — flatten it to a string so it fits a CSV cell instead of breaking
+        # the writer on a non-scalar value.
+        rows = [{**row, "root_cause_chain": json.dumps(row.get("root_cause_chain", []))} for row in incidents]
+        writer = csv.DictWriter(output, fieldnames=rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+    else:
+        output.write("No incidents found")
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=sentinel_incidents.csv"},
+    )
 
 # WebSocket
 @app.websocket("/ws")
