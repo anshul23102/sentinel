@@ -1,15 +1,19 @@
-import asyncio
-import threading
-from groq import Groq
 import json
 import os
 from datetime import datetime
+from groq import AsyncGroq
 from db import get_recent_logs, get_endpoint_stats, get_recent_anomalies
 from anomaly_detector import get_health_snapshot
 from prompt_guard import wrap_if_suspicious, SYSTEM_PROMPT_ADDENDUM
 
+# AsyncGroq is the SDK's native async client (built on httpx.AsyncClient) —
+# network I/O is genuinely non-blocking at the asyncio level, no thread
+# offloading needed. An earlier version of this file used the sync Groq
+# client wrapped in asyncio.to_thread plus a manual threading.Thread +
+# asyncio.Queue bridge for streaming; this is simpler and has no extra
+# moving parts, so it replaced that approach entirely.
 _api_key = os.environ.get("GROQ_API_KEY", "")
-client = Groq(api_key=_api_key) if _api_key else None
+client = AsyncGroq(api_key=_api_key) if _api_key else None
 MODEL = "openai/gpt-oss-120b"
 
 def _get_client():
@@ -17,7 +21,7 @@ def _get_client():
     if client is None:
         _api_key = os.environ.get("GROQ_API_KEY", "")
         if _api_key:
-            client = Groq(api_key=_api_key)
+            client = AsyncGroq(api_key=_api_key)
     return client
 
 BASE_SYSTEM_PROMPT = """You are Sentinel, an expert SRE AI embedded inside a live API monitoring dashboard.
@@ -56,8 +60,7 @@ async def _generate(prompt: str, max_tokens: int = 600) -> str:
     c = _get_client()
     if not c:
         return "AI unavailable: GROQ_API_KEY not configured."
-    response = await asyncio.to_thread(
-        c.chat.completions.create,
+    response = await c.chat.completions.create(
         model=MODEL,
         messages=[
             {"role": "system", "content": BASE_SYSTEM_PROMPT},
@@ -114,42 +117,21 @@ async def chat_stream(sid: str, message: str, conversation_history: list[dict]):
         yield "AI unavailable: GROQ_API_KEY not configured."
         return
 
-    # groq's SDK returns a synchronous iterator — pulling each chunk is a
-    # blocking network read, so it must run off the event loop in a thread.
-    # A worker thread feeds an asyncio.Queue; this coroutine just drains it.
-    loop  = asyncio.get_event_loop()
-    queue: asyncio.Queue = asyncio.Queue()
-    DONE  = object()
-
-    def _consume_stream():
-        try:
-            stream = c.chat.completions.create(
-                model=MODEL,
-                messages=messages,
-                max_tokens=600,
-                temperature=0.55,
-                reasoning_effort="low",
-                stream=True,
-            )
-            for chunk in stream:
-                delta = chunk.choices[0].delta.content
-                if delta:
-                    loop.call_soon_threadsafe(queue.put_nowait, delta)
-        except Exception as e:
-            loop.call_soon_threadsafe(queue.put_nowait, e)
-        finally:
-            loop.call_soon_threadsafe(queue.put_nowait, DONE)
-
-    threading.Thread(target=_consume_stream, daemon=True).start()
-
-    while True:
-        item = await queue.get()
-        if item is DONE:
-            break
-        if isinstance(item, Exception):
-            yield f"AI error: {item}"
-            break
-        yield item
+    try:
+        stream = await c.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            max_tokens=600,
+            temperature=0.55,
+            reasoning_effort="low",
+            stream=True,
+        )
+        async for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
+    except Exception as e:
+        yield f"AI error: {e}"
 
 async def chat(sid: str, message: str, conversation_history: list[dict]) -> str:
     health = await get_health_snapshot(sid)
@@ -172,8 +154,7 @@ async def chat(sid: str, message: str, conversation_history: list[dict]) -> str:
     c = _get_client()
     if not c:
         return "AI unavailable: GROQ_API_KEY not configured."
-    response = await asyncio.to_thread(
-        c.chat.completions.create,
+    response = await c.chat.completions.create(
         model=MODEL,
         messages=messages,
         max_tokens=600,
