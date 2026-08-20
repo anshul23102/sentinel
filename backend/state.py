@@ -1,10 +1,16 @@
 import os
 import json
+import time
+import uuid
 import redis.asyncio as redis
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
-WINDOW_MAXLEN  = 60     # matches the 60s sliding window the detector uses
+WINDOW_MAXLEN  = 60     # tick count cap for the feature window (already one
+                        # push per second, so this is already time-aligned)
+WINDOW_SECONDS = 60     # wall-clock span for the raw per-request latency/error
+                        # windows — see push_window's docstring for why this
+                        # has to be time-based, not sample-count-based
 SESSION_TTL    = 1800   # 30 min — every session key gets this TTL refreshed on
                         # write, so an abandoned session's Redis footprint
                         # self-cleans even if the reaper task's cancel logic
@@ -28,22 +34,41 @@ def latency_key(sid: str, endpoint: str) -> str:
 def error_key(sid: str, endpoint: str) -> str:
     return _k(sid, "win", "errors", endpoint)
 
-async def push_window(sid: str, key: str, value: float, endpoint: str) -> None:
-    """Append to a capped sliding window, tracking the endpoint so health
-    snapshots can enumerate every endpoint this session has ever reported."""
+async def push_window(sid: str, key: str, value: float, endpoint: str, now: float | None = None) -> None:
+    """Append to a WALL-CLOCK-bounded sliding window (a Redis sorted set,
+    score = timestamp), tracking the endpoint so health snapshots can
+    enumerate every endpoint this session has ever reported.
+
+    This used to be a count-capped list (last 60 SAMPLES). That only means
+    "last 60 seconds" at exactly ~1 req/s — this system's endpoints range
+    from ~0.6 to ~7.5 req/s by traffic weight, so a count cap gave some
+    endpoints an ~8 second window and others ~100 seconds for the identical
+    "60s sliding window" the whole detector assumes. A time-based window
+    means 60 seconds actually means 60 seconds, for every endpoint.
+
+    Members must be unique for a sorted set (ZADD would silently collapse
+    two identical values landing in the same instant), so each entry is
+    tagged with a random suffix and stripped back off on read.
+    """
+    now = now if now is not None else time.time()
     c = get_client()
+    member = f"{value}:{uuid.uuid4().hex}"
     async with c.pipeline(transaction=True) as pipe:
-        pipe.rpush(key, value)
-        pipe.ltrim(key, -WINDOW_MAXLEN, -1)
+        pipe.zadd(key, {member: now})
+        pipe.zremrangebyscore(key, 0, now - WINDOW_SECONDS)
         pipe.expire(key, SESSION_TTL)
         pipe.sadd(_k(sid, "known_endpoints"), endpoint)
         pipe.expire(_k(sid, "known_endpoints"), SESSION_TTL)
         await pipe.execute()
 
-async def get_window(key: str) -> list[float]:
+async def get_window(key: str, now: float | None = None) -> list[float]:
+    now = now if now is not None else time.time()
     c = get_client()
-    raw = await c.lrange(key, 0, -1)
-    return [float(v) for v in raw]
+    # Evict on read too — a quiet endpoint with no recent writes would
+    # otherwise keep showing stale samples past WINDOW_SECONDS forever.
+    await c.zremrangebyscore(key, 0, now - WINDOW_SECONDS)
+    raw = await c.zrange(key, 0, -1)
+    return [float(member.rsplit(":", 1)[0]) for member in raw]
 
 async def get_known_endpoints(sid: str) -> list[str]:
     c = get_client()

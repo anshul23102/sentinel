@@ -3,14 +3,33 @@ import state
 
 
 @pytest.mark.asyncio
-async def test_window_caps_at_maxlen(sid):
+async def test_window_is_time_based_not_sample_count_based(sid):
+    """Regression test for a real bug found while merging upstream PR #76
+    (independently confirmed here): a count-capped window means '60 seconds'
+    only holds true at exactly ~1 req/s. At this system's actual traffic
+    weights, a busy endpoint's 60-sample window covered as little as ~8
+    real seconds and a quiet endpoint's covered ~100 — a 12x disparity in
+    what 'recent history' meant per endpoint. Fixed by switching to a
+    wall-clock-bounded window (a Redis sorted set), verified here with an
+    explicit fake clock rather than relying on real elapsed time."""
     key = state.latency_key(sid, "/api/test")
-    for i in range(state.WINDOW_MAXLEN + 20):
-        await state.push_window(sid, key, float(i), "/api/test")
-    window = await state.get_window(key)
-    assert len(window) == state.WINDOW_MAXLEN
-    assert window[-1] == float(state.WINDOW_MAXLEN + 19)  # newest value kept
-    assert window[0] == float(20)  # oldest values trimmed off
+    base = 1_000_000.0
+
+    # Simulate a busy endpoint: 100 requests within the same 5-second span
+    # (well inside the 60s window) — a count cap would have evicted the
+    # first 40 of these; a time-based window must keep all of them.
+    for i in range(100):
+        await state.push_window(sid, key, float(i), "/api/test", now=base + i * 0.05)
+    window = await state.get_window(key, now=base + 5.0)
+    assert len(window) == 100  # nothing evicted — all within WINDOW_SECONDS
+
+    # Now push one more sample well past 60s after the LAST burst entry
+    # (base + 4.95) — everything from the burst should be evicted as stale,
+    # regardless of how many samples they were.
+    later = base + 4.95 + 65.0
+    await state.push_window(sid, key, 999.0, "/api/test", now=later)
+    window = await state.get_window(key, now=later)
+    assert window == [999.0]
 
 
 @pytest.mark.asyncio
