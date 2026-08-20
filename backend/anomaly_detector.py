@@ -115,7 +115,7 @@ async def process_log_batch(sid: str, logs: list[dict]) -> list[dict]:
         latency_window_before = await state.get_window(lat_key)
         error_window_before   = await state.get_window(err_key)
 
-        avg_latency = float(np.mean([l["latency_ms"] for l in batch]))
+        avg_latency = float(np.mean([entry["latency_ms"] for entry in batch]))
         lat_z = _robust_z_single(avg_latency, latency_window_before)
         lat_confidence = _percentile_confidence(lat_z, _robust_z_series(latency_window_before))
 

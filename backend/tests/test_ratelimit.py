@@ -44,7 +44,8 @@ async def test_different_ips_have_independent_limits():
     dep = ratelimit.rate_limit(_unique_bucket(), limit=2, window_seconds=60)
     req_a = _FakeRequest(ip="1.1.1.1")
     req_b = _FakeRequest(ip="2.2.2.2")
-    await dep(req_a); await dep(req_a)  # exhaust A's limit
+    await dep(req_a)
+    await dep(req_a)  # exhaust A's limit
     await dep(req_b)  # B is unaffected
     with pytest.raises(HTTPException):
         await dep(req_a)
