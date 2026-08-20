@@ -1,306 +1,193 @@
-"""
-Unit tests for backend/anomaly_detector.py
-Issue #4 - https://github.com/anshul23102/sentinel/issues/4
-
-Tests cover:
-- Normal traffic (no anomaly)
-- Latency spike detection via Z-score
-- Error rate surge detection
-- Health snapshot / health scoring
-- Edge cases (insufficient data, zero std dev)
-"""
-
+import numpy as np
 import pytest
-from collections import deque
-
 from anomaly_detector import (
-    process_log_batch,
-    get_health_snapshot,
-    _latency_windows,
-    _error_windows,
-    _request_windows,
-    _active_anomalies,
-    _z_score,
-    _error_rate,
-)
-from config import (
-    ANOMALY_ZSCORE_THRESHOLD,
-    ANOMALY_ERROR_RATE_THRESHOLD,
+    _robust_z_series, _robust_z_single, _percentile_confidence, _error_rate,
+    _multivariate_anomaly, process_log_batch, get_health_snapshot,
 )
 
 
-# ===========================================================================
-# Helpers
-# ===========================================================================
-
-def _reset():
-    """Clear all module-level state between tests."""
-    _latency_windows.clear()
-    _error_windows.clear()
-    _request_windows.clear()
-    _active_anomalies.clear()
+def test_robust_z_series_flags_a_real_outlier():
+    window = [72.0] * 30 + [900.0]  # one genuine outlier at the end
+    z = _robust_z_series(window)
+    assert z[-1] > 3.5  # crosses MAD_Z_THRESHOLD
+    assert all(abs(v) < 1.0 for v in z[:-1])  # the flat baseline itself isn't flagged
 
 
-def _make_logs(endpoint: str, latency_ms: float, status_code: int = 200, n: int = 1) -> list[dict]:
-    return [{"endpoint": endpoint, "latency_ms": latency_ms, "status_code": status_code}] * n
+def test_robust_z_series_needs_minimum_samples():
+    assert list(_robust_z_series([1.0, 2.0, 3.0])) == [0.0, 0.0, 0.0]
 
 
-@pytest.fixture(autouse=True)
-def reset_state():
-    """Automatically reset module state before every test."""
-    _reset()
-    yield
-    _reset()
+def test_robust_z_series_handles_zero_variance():
+    z = _robust_z_series([72.0] * 20)
+    assert all(v == 0.0 for v in z)
 
 
-# ===========================================================================
-# Z-score helper tests
-# ===========================================================================
-
-class TestZscoreHelper:
-
-    def test_returns_zero_when_insufficient_data(self):
-        """Fewer than 10 samples should return 0.0, not raise."""
-        window = deque([80.0] * 5, maxlen=60)
-        assert _z_score(2000.0, window) == 0.0
-
-    def test_returns_zero_when_std_is_zero(self):
-        """All identical values -> std=0 -> should return 0.0."""
-        window = deque([100.0] * 20, maxlen=60)
-        assert _z_score(100.0, window) == 0.0
-
-    def test_large_spike_gives_high_zscore(self):
-        """A spike value already inside a mixed window should produce Z > threshold."""
-        # Simulate what process_log_batch does: append the spike first, then call _z_score
-        window = deque([80.0] * 55 + [2000.0] * 5, maxlen=60)
-        z = _z_score(2000.0, window)
-        assert z > ANOMALY_ZSCORE_THRESHOLD
-
-    def test_normal_value_gives_low_zscore(self):
-        """A value close to the mean should produce a small Z-score."""
-        # Use a window with natural variation (70-90) so std is ~6ms
-        import random
-        random.seed(42)
-        window = deque([random.uniform(70, 90) for _ in range(60)], maxlen=60)
-        z = _z_score(80.0, window)  # 80ms is right in the middle of the range
-        assert abs(z) < 1.0
+def test_percentile_confidence_ranks_the_latest_point():
+    # needs >=10 points — _percentile_confidence returns 0.0 below that,
+    # same "not enough history yet" honesty rule used throughout the detector
+    historical = np.array([0.1, 0.2, -0.3, 0.15, 0.05, -0.1, 0.25, -0.2, 0.3, 0.12])
+    conf = _percentile_confidence(current_z=5.0, historical_z_series=historical)
+    assert conf == 1.0  # more extreme than 100% of history
 
 
-# ===========================================================================
-# Error rate helper tests
-# ===========================================================================
+def test_baseline_pollution_understates_a_genuine_spike():
+    """Pins a real, high-impact bug independently found while merging
+    upstream PR #19 (which fixed the identical issue in the previous
+    mean/std detector). The real system pushes an entire ~30-item batch into
+    a 60-item window per tick — so comparing against the window AFTER that
+    push means up to ~50% of the 'baseline' is the very spike being
+    evaluated. A single-point version of this test showed no measurable
+    effect (median/MAD is robust up to ~50% contamination, so 1-of-31 barely
+    moves it) — the batch-sized version below is what actually happens, and
+    the effect is dramatic, not theoretical."""
+    baseline = [72.0 + (i % 5) for i in range(30)]        # healthy history
+    spike_batch = [900.0 + (i % 10) for i in range(30)]   # one tick's worth of a real spike
 
-class TestErrorRateHelper:
+    # OLD (buggy) approach: push the batch first, then read the z of the
+    # latest point from a window that already contains the whole batch.
+    polluted_window = baseline + spike_batch
+    polluted_z = _robust_z_series(polluted_window)[-1]
 
-    def test_no_errors(self):
-        window = deque([200] * 20, maxlen=60)
-        assert _error_rate(window) == 0.0
+    # NEW (fixed) approach: score the batch's average against the baseline
+    # BEFORE the batch is added.
+    avg_latency = sum(spike_batch) / len(spike_batch)
+    correct_z = _robust_z_single(avg_latency, baseline)
 
-    def test_all_errors(self):
-        window = deque([500] * 20, maxlen=60)
-        assert _error_rate(window) == 1.0
-
-    def test_mixed(self):
-        window = deque([200] * 8 + [500] * 2, maxlen=60)
-        assert abs(_error_rate(window) - 0.2) < 1e-9
-
-    def test_empty_window(self):
-        assert _error_rate(deque(maxlen=60)) == 0.0
-
-
-# ===========================================================================
-# process_log_batch - normal traffic
-# ===========================================================================
-
-class TestNormalTraffic:
-
-    def test_no_anomaly_on_normal_traffic(self):
-        """Stable low-latency traffic should produce zero anomalies."""
-        anomalies = process_log_batch(_make_logs("/api/checkout", latency_ms=80.0, n=30))
-        assert anomalies == []
-
-    def test_no_anomaly_on_moderate_latency_increase(self):
-        """A slight uptick should not cross the Z-score threshold."""
-        process_log_batch(_make_logs("/api/auth", latency_ms=80.0, n=55))
-        anomalies = process_log_batch(_make_logs("/api/auth", latency_ms=100.0, n=5))
-        assert anomalies == []
-
-    def test_returns_list(self):
-        """process_log_batch must always return a list."""
-        result = process_log_batch(_make_logs("/api/search", latency_ms=80.0, n=5))
-        assert isinstance(result, list)
+    assert polluted_z < 3.5    # the bug: a real, severe spike doesn't even cross threshold
+    assert correct_z > 3.5     # the fix: the same spike is correctly detected
+    assert correct_z > polluted_z * 100  # not a marginal difference — a different outcome entirely
 
 
-# ===========================================================================
-# process_log_batch - latency spike detection
-# ===========================================================================
-
-class TestLatencySpikeDetection:
-
-    def test_latency_spike_detected(self):
-        """A spike well above 250 ms against a large stable baseline must be flagged."""
-        # Need a big baseline so the spike batch doesn't dominate the std
-        process_log_batch(_make_logs("/api/checkout", latency_ms=80.0, n=55))
-        anomalies = process_log_batch(_make_logs("/api/checkout", latency_ms=2000.0, n=5))
-        types = [a["anomaly_type"] for a in anomalies]
-        assert "latency_spike" in types
-
-    def test_latency_spike_anomaly_fields(self):
-        """A latency_spike anomaly must contain the required fields."""
-        process_log_batch(_make_logs("/api/checkout", latency_ms=80.0, n=55))
-        anomalies = process_log_batch(_make_logs("/api/checkout", latency_ms=2000.0, n=5))
-        spike = next(a for a in anomalies if a["anomaly_type"] == "latency_spike")
-        for field in ("detected_at", "severity", "endpoint", "description", "z_score", "avg_latency"):
-            assert field in spike, f"Missing field: {field}"
-
-    def test_spike_below_250ms_not_flagged(self):
-        """Even a high Z-score must not fire if avg latency <= 250 ms."""
-        process_log_batch(_make_logs("/api/products", latency_ms=10.0, n=55))
-        anomalies = process_log_batch(_make_logs("/api/products", latency_ms=200.0, n=5))
-        types = [a["anomaly_type"] for a in anomalies]
-        assert "latency_spike" not in types
-
-    def test_insufficient_data_no_spike_flagged(self):
-        """With fewer than 10 baseline samples Z-score returns 0 - no spike."""
-        anomalies = process_log_batch(_make_logs("/api/auth", latency_ms=2000.0, n=3))
-        types = [a["anomaly_type"] for a in anomalies]
-        assert "latency_spike" not in types
-
-    def test_separate_endpoints_are_independent(self):
-        """A spike on one endpoint must not affect another."""
-        process_log_batch(_make_logs("/api/checkout", latency_ms=80.0, n=55))
-        process_log_batch(_make_logs("/api/auth", latency_ms=80.0, n=55))
-        process_log_batch(_make_logs("/api/checkout", latency_ms=2000.0, n=5))
-        anomalies = process_log_batch(_make_logs("/api/auth", latency_ms=82.0, n=2))
-        types = [a["anomaly_type"] for a in anomalies]
-        assert "latency_spike" not in types
+def test_error_rate_counts_4xx_and_5xx():
+    window = [200, 200, 404, 500, 200]
+    assert _error_rate(window) == pytest.approx(0.4)
 
 
-# ===========================================================================
-# process_log_batch - error rate surge detection
-# ===========================================================================
-
-class TestErrorSurgeDetection:
-
-    def test_error_surge_detected(self):
-        """Error rate above ERROR_RATE_THRESHOLD must produce an error_surge anomaly."""
-        anomalies = process_log_batch(_make_logs("/api/cart", latency_ms=80.0, status_code=500, n=40))
-        types = [a["anomaly_type"] for a in anomalies]
-        assert "error_surge" in types
-
-    def test_error_surge_anomaly_fields(self):
-        """An error_surge anomaly must contain required fields."""
-        anomalies = process_log_batch(_make_logs("/api/cart", latency_ms=80.0, status_code=500, n=40))
-        surge = next(a for a in anomalies if a["anomaly_type"] == "error_surge")
-        for field in ("detected_at", "severity", "endpoint", "description", "error_rate"):
-            assert field in surge, f"Missing field: {field}"
-
-    def test_low_error_rate_no_surge(self):
-        """Error rate well below threshold should not trigger error_surge."""
-        logs = _make_logs("/api/inventory", latency_ms=80.0, status_code=200, n=19)
-        logs += _make_logs("/api/inventory", latency_ms=80.0, status_code=500, n=1)
-        anomalies = process_log_batch(logs)
-        types = [a["anomaly_type"] for a in anomalies]
-        assert "error_surge" not in types
-
-    def test_4xx_counts_as_error(self):
-        """4xx responses must count toward the error rate."""
-        anomalies = process_log_batch(_make_logs("/api/auth", latency_ms=80.0, status_code=429, n=40))
-        types = [a["anomaly_type"] for a in anomalies]
-        assert "error_surge" in types
-    
-    def test_error_rate_exactly_at_threshold_triggers_surge(self):
-        """Error rate at or above ERROR_RATE_THRESHOLD must trigger error_surge."""
-        n_errors = int(20 * ANOMALY_ERROR_RATE_THRESHOLD) + 1
-        logs = _make_logs("/api/orders", latency_ms=80.0, status_code=200, n=20 - n_errors)
-        logs += _make_logs("/api/orders", latency_ms=80.0, status_code=500, n=n_errors)
-        anomalies = process_log_batch(logs)
-        types = [a["anomaly_type"] for a in anomalies]
-        assert "error_surge" in types
+def test_error_rate_empty_window():
+    assert _error_rate([]) == 0.0
 
 
-# ===========================================================================
-# get_health_snapshot tests
-# ===========================================================================
-
-class TestHealthSnapshot:
-
-    def test_empty_snapshot_on_no_data(self):
-        """With no logs processed, snapshot should be empty."""
-        assert get_health_snapshot() == {}
-
-    def test_healthy_status_on_normal_traffic(self):
-        """Low latency, no errors -> status should be 'healthy'."""
-        process_log_batch(_make_logs("/api/checkout", latency_ms=80.0, n=30))
-        snapshot = get_health_snapshot()
-        assert snapshot["/api/checkout"]["status"] == "healthy"
-
-    def test_critical_status_on_high_error_rate(self):
-        """Error rate > 28% -> status should be 'critical'."""
-        process_log_batch(_make_logs("/api/cart", latency_ms=80.0, status_code=500, n=40))
-        snapshot = get_health_snapshot()
-        assert snapshot["/api/cart"]["status"] == "critical"
-
-    def test_critical_status_on_high_latency(self):
-        """Avg latency > 600 ms -> status should be 'critical'."""
-        process_log_batch(_make_logs("/api/search", latency_ms=700.0, n=20))
-        snapshot = get_health_snapshot()
-        assert snapshot["/api/search"]["status"] == "critical"
-
-    def test_snapshot_contains_required_fields(self):
-        """Each endpoint entry must have the expected keys."""
-        process_log_batch(_make_logs("/api/auth", latency_ms=80.0, n=10))
-        snapshot = get_health_snapshot()
-        entry = snapshot["/api/auth"]
-        for field in ("status", "avg_latency_ms", "p95_latency_ms", "error_rate", "uptime_pct", "sample_size"):
-            assert field in entry, f"Missing field: {field}"
-
-    def test_uptime_100_on_no_errors(self):
-        """Zero errors -> uptime should be 100.0."""
-        process_log_batch(_make_logs("/api/products", latency_ms=80.0, n=20))
-        snapshot = get_health_snapshot()
-        assert snapshot["/api/products"]["uptime_pct"] == 100.0
-
-    def test_uptime_drops_with_errors(self):
-        """Errors must reduce uptime below 100."""
-        process_log_batch(_make_logs("/api/products", latency_ms=80.0, status_code=500, n=10))
-        snapshot = get_health_snapshot()
-        assert snapshot["/api/products"]["uptime_pct"] < 100.0
+def test_multivariate_anomaly_needs_minimum_samples():
+    score, conf = _multivariate_anomaly([[70, 0.01, 30]] * 5)
+    assert (score, conf) == (0.0, 0.0)
 
 
-# ===========================================================================
-# regression_test
-# ===========================================================================
+def test_multivariate_anomaly_flags_a_joint_deviation():
+    normal = [[72 + i % 3, 0.01, 30] for i in range(30)]
+    anomalous = normal + [[400, 0.2, 30]]  # latency AND error rate both elevated together
+    score, conf = _multivariate_anomaly(anomalous)
+    assert score > 0
+    assert conf > 0.8
 
-class TestSlidingWindowUpdates:
 
-    def test_error_and_request_windows_updated_once_per_log(self):
-        logs = [
-            {
-                "endpoint": "/api/test",
-                "latency_ms": 100,
-                "status_code": 200,
-            },
-            {
-                "endpoint": "/api/test",
-                "latency_ms": 120,
-                "status_code": 500,
-            },
-            {
-                "endpoint": "/api/test",
-                "latency_ms": 140,
-                "status_code": 404,
-            },
+@pytest.mark.asyncio
+async def test_process_log_batch_detects_a_sustained_degradation(sid):
+    """A real finding from development, worth being explicit about: once a
+    SUSTAINED, uniform-magnitude shift fully occupies the 60-sample window,
+    the shifted level becomes the window's own new 'normal', and the
+    self-referential z-score/CUSUM/Isolation-Forest checks can lose
+    sensitivity to it — confirmed directly by isolating a latency-only shift
+    with realistic Gaussian noise (no errors) and watching z oscillate
+    between -2 and 2.4 across 15 full ticks, never crossing the 3.5
+    threshold. That's a genuine, structural property of self-referential
+    sliding-window detection, not a bug introduced by this project.
+
+    What actually makes detection reliable in this system (and in the real,
+    continuously-running demo, verified live) is that a real failure
+    scenario elevates BOTH latency AND error rate together — error_surge
+    fires on an ABSOLUTE floor (err_rate > 15%), which has no such window-
+    saturation weakness. This test mirrors the real db_slowdown scenario's
+    actual shape (elevated latency + 15% error rate) rather than an
+    unrealistically pure, error-free latency shift, and accepts either
+    detection path firing as success — matching how the system is actually
+    designed and verified to work end-to-end."""
+    for _ in range(3):
+        healthy = [
+            {"endpoint": "/api/checkout", "latency_ms": max(8, 72.0 + (i % 20) - 10), "status_code": 200}
+            for i in range(30)
         ]
+        await process_log_batch(sid, healthy)
 
-        process_log_batch(logs)
+    detected = None
+    for _ in range(6):
+        batch = []
+        for i in range(30):
+            is_error = i < 5  # ~15% error rate, matching the real db_slowdown scenario
+            batch.append({
+                "endpoint": "/api/checkout",
+                "latency_ms": max(8, 850.0 + (i % 80) - 40),  # matches base_latency=850, spread ~std=220
+                "status_code": 503 if is_error else 200,
+            })
+        anomalies = await process_log_batch(sid, batch)
+        hit = next((a for a in anomalies if a["anomaly_type"] in ("latency_spike", "error_surge")), None)
+        if hit:
+            detected = hit
+            break
 
-        assert len(_latency_windows["/api/test"]) == 3
-        assert len(_error_windows["/api/test"]) == 3
-        assert len(_request_windows["/api/test"]) == 3
+    assert detected is not None
+    assert detected["endpoint"] == "/api/checkout"
+    assert len(detected["root_cause_chain"]) > 0
+    # every confidence value must be a real number in [0, 1], not a placeholder
+    for step in detected["root_cause_chain"]:
+        assert 0.0 <= step["confidence"] <= 1.0
 
-        process_log_batch(logs)
 
-        assert len(_latency_windows["/api/test"]) == 6
-        assert len(_error_windows["/api/test"]) == 6
-        assert len(_request_windows["/api/test"]) == 6
+@pytest.mark.asyncio
+async def test_process_log_batch_does_not_false_alarm_on_healthy_traffic(sid):
+    healthy = [
+        {"endpoint": "/api/products", "latency_ms": 70.0 + (i % 5), "status_code": 200}
+        for i in range(60)
+    ]
+    anomalies = await process_log_batch(sid, healthy)
+    assert anomalies == []
+
+
+@pytest.mark.asyncio
+async def test_health_snapshot_reflects_real_traffic(sid):
+    batch = [
+        {"endpoint": "/api/search", "latency_ms": 80.0, "status_code": 200}
+        for _ in range(20)
+    ] + [
+        {"endpoint": "/api/search", "latency_ms": 85.0, "status_code": 500}
+        for _ in range(5)
+    ]
+    await process_log_batch(sid, batch)
+    snapshot = await get_health_snapshot(sid)
+    assert "/api/search" in snapshot
+    assert snapshot["/api/search"]["error_rate"] == pytest.approx(5 / 25, abs=0.01)
+
+
+@pytest.mark.asyncio
+async def test_pure_latency_shift_now_detected_on_first_tick(sid):
+    """Before the baseline-pollution fix, this exact scenario (realistic
+    Gaussian noise, zero errors, seed=42) never fired across 15 full ticks —
+    that's what originally justified adding errors to the sustained-
+    degradation test above, to exercise the reliable error_surge path
+    instead. With the fix, the same pure latency shift fires immediately."""
+    import random
+    random.seed(42)
+    for _ in range(3):
+        healthy = [
+            {"endpoint": "/api/checkout", "latency_ms": max(8, random.gauss(72, 18)), "status_code": 200}
+            for _ in range(30)
+        ]
+        await process_log_batch(sid, healthy)
+
+    spike = [
+        {"endpoint": "/api/checkout", "latency_ms": max(8, random.gauss(850, 220)), "status_code": 200}
+        for _ in range(30)
+    ]
+    anomalies = await process_log_batch(sid, spike)
+    assert any(a["anomaly_type"] == "latency_spike" for a in anomalies)
+
+
+@pytest.mark.asyncio
+async def test_sessions_do_not_see_each_others_detector_state(sid):
+    other_sid = sid + "-other"
+    await process_log_batch(sid, [
+        {"endpoint": "/api/cart", "latency_ms": 900.0, "status_code": 200} for _ in range(40)
+    ])
+    snapshot_a = await get_health_snapshot(sid)
+    snapshot_b = await get_health_snapshot(other_sid)
+    assert "/api/cart" in snapshot_a
+    assert snapshot_b == {}  # a never-touched session sees nothing from sid

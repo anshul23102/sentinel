@@ -1,6 +1,16 @@
 #!/bin/bash
 echo "🚀 Starting Sentinel — API Failure Detection Agent"
 
+# Postgres and Redis must already be running locally — this script doesn't
+# start them, since how you run them (Homebrew services, Docker, a system
+# daemon) is a local setup choice, not something to assume.
+if ! pg_isready -q 2>/dev/null; then
+  echo "⚠️  Postgres doesn't look reachable — start it and run 'createdb sentinel' first."
+fi
+if ! redis-cli ping >/dev/null 2>&1; then
+  echo "⚠️  Redis doesn't look reachable — start it before continuing."
+fi
+
 # Start backend
 cd backend
 cp .env.example .env 2>/dev/null || true

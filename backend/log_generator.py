@@ -1,8 +1,35 @@
 import asyncio
+import math
 import random
 import time
 from datetime import datetime, timezone
 from db import bulk_insert_logs
+import state
+
+# Simulated time compression: a full "day" cycles every 3 real minutes and a
+# full "week" every 7 simulated days (21 real minutes). A genuine 24-hour
+# cycle can't be demonstrated or verified within a working session, so this
+# runs on an accelerated, clearly-labeled clock instead of silently pretending
+# to be real time — daily/weekly seasonality is then something you can
+# actually watch happen and test against, not something asserted on faith.
+SIM_DAY_SECONDS  = 180
+SIM_WEEK_DAYS    = 7
+BUCKETS_PER_DAY  = 12   # shared with main.py's periodic bucket recording and the seasonal Holt-Winters fit
+
+def seasonal_multiplier() -> tuple[float, float]:
+    """(traffic_multiplier, latency_multiplier) for the current point in the
+    simulated day/week cycle. Traffic follows a daily peak/trough plus a
+    milder weekly dip; latency rises slightly with load — the same real-world
+    correlation between traffic volume and response time."""
+    now = time.time()
+    day_phase  = (now % SIM_DAY_SECONDS) / SIM_DAY_SECONDS * 2 * math.pi
+    week_phase = (now % (SIM_DAY_SECONDS * SIM_WEEK_DAYS)) / (SIM_DAY_SECONDS * SIM_WEEK_DAYS) * 2 * math.pi
+
+    daily  = 1.0 + 0.55 * math.sin(day_phase - math.pi / 2)
+    weekly = 1.0 + 0.20 * math.sin(week_phase - math.pi / 2)
+    traffic_mult  = max(0.25, daily * weekly)
+    latency_mult  = 1.0 + 0.12 * (traffic_mult - 1.0)
+    return traffic_mult, latency_mult
 
 # Endpoints with REALISTIC traffic weights matching e-commerce patterns:
 # browse/search dominate, checkout is rare but critical
@@ -88,35 +115,38 @@ SCENARIOS = {
     },
 }
 
-_current_scenario  = "normal"
-_scenario_intensity = 1.0
-_scenario_start_time = time.time()
+async def set_scenario(sid: str, scenario: str, intensity: float = 1.0):
+    await state.set_scenario(sid, scenario, intensity, time.time())
 
-def set_scenario(scenario: str, intensity: float = 1.0):
-    global _current_scenario, _scenario_intensity, _scenario_start_time
-    _current_scenario   = scenario
-    _scenario_intensity = intensity
-    _scenario_start_time = time.time()
+async def get_current_scenario(sid: str) -> str:
+    return (await state.get_scenario(sid))["current"]
 
-def get_current_scenario():
-    return _current_scenario
-
-def _generate_log():
-    scenario = SCENARIOS[_current_scenario]
+def _generate_log(sid: str, scenario_state: dict, latency_mult: float = 1.0):
+    current_scenario_name = scenario_state["current"]
+    scenario     = SCENARIOS[current_scenario_name]
+    intensity    = scenario_state["intensity"]
+    start_time   = scenario_state["start_time"]
     endpoint, method, service = random.choices(ENDPOINTS, weights=ENDPOINT_WEIGHTS, k=1)[0]
 
     affected = "affected_endpoints" not in scenario or endpoint in scenario["affected_endpoints"]
-    effective_error_rate = scenario["error_rate"] * _scenario_intensity if affected else 0.005
+    is_failure_hit = current_scenario_name != "normal" and affected
+    effective_error_rate = scenario["error_rate"] * intensity if affected else 0.005
 
     # Progressive memory leak: latency climbs over 90 seconds then plateaus
-    if _current_scenario == "memory_leak" and affected:
-        elapsed      = time.time() - _scenario_start_time
+    if current_scenario_name == "memory_leak" and affected:
+        elapsed      = time.time() - start_time
         growth       = min(4.0, 1.0 + (elapsed / 45.0))  # 1x → 4x over 45s
         base_latency = scenario["base_latency"] * growth
         latency_std  = scenario["latency_std"] * growth
+    elif is_failure_hit:
+        # An injected failure stays crisply detectable regardless of
+        # simulated time of day — seasonal modulation only touches the
+        # healthy baseline below, never the failure magnitude itself.
+        base_latency = scenario["base_latency"]
+        latency_std  = scenario["latency_std"]
     else:
-        base_latency = scenario["base_latency"] if affected else 72
-        latency_std  = scenario["latency_std"]  if affected else 18
+        base_latency = 72 * latency_mult
+        latency_std  = 18
 
     latency  = max(8, random.gauss(base_latency, latency_std))
     is_error = random.random() < effective_error_rate
@@ -129,6 +159,7 @@ def _generate_log():
         error_msg = None
 
     return {
+        "session_id":    sid,
         "timestamp":     datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
         "endpoint":      endpoint,
         "method":        method,
@@ -138,7 +169,7 @@ def _generate_log():
         "service":       service,
         "user_id":       f"usr_{random.randint(10000, 99999)}",
         "metadata": {
-            "scenario": _current_scenario,
+            "scenario": current_scenario_name,
             "region":   random.choices(
                 ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
                 weights=[45, 25, 20, 10]
@@ -148,8 +179,10 @@ def _generate_log():
         },
     }
 
-async def run_generator(broadcast_fn, rps: int = 30):
-    """Generate logs at ~rps/second with realistic traffic burst patterns."""
+async def run_generator(sid: str, broadcast_fn, rps: int = 30):
+    """Generate logs at ~rps/second with realistic traffic burst patterns,
+    for one session's isolated simulated world. Runs until cancelled by the
+    session manager when this session goes idle."""
     tick = 0
     while True:
         tick += 1
@@ -158,10 +191,14 @@ async def run_generator(broadcast_fn, rps: int = 30):
         # Occasional traffic spike (every ~30s) to simulate real usage patterns
         if tick % 30 == 0:
             jitter = rps // 3
-        count = max(4, rps + jitter)
+        traffic_mult, latency_mult = seasonal_multiplier()
+        count = max(4, round((rps + jitter) * traffic_mult))
 
-        batch = [_generate_log() for _ in range(count)]
-        await bulk_insert_logs(batch)
+        # Read scenario state from Redis once per tick, not once per log —
+        # keeps the hot path from hammering Redis dozens of times a second.
+        scenario_state = await state.get_scenario(sid)
+        batch = [_generate_log(sid, scenario_state, latency_mult) for _ in range(count)]
+        await bulk_insert_logs(sid, batch)
         # Slim payload for WS broadcast — strip metadata/user_id (never rendered)
         slim = [{
             "timestamp":   log["timestamp"],

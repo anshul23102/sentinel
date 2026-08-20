@@ -151,7 +151,7 @@ export function generateAiAnalyses(anomalies) {
       anomaly_id:  a.id,
       analysis:    texts[_scenario] || 'Anomaly detected. Investigate recent deployments and traffic patterns.',
       analyzed_at: a.detected_at,
-      model:       'llama-3.3-70b-versatile',
+      model:       'openai/gpt-oss-120b',
     }
   }
   return analyses

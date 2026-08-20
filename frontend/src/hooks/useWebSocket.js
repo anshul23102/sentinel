@@ -6,8 +6,23 @@ import {
 } from './mockData'
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
-const WS_URL  = BACKEND.replace(/^http/, 'ws') + '/ws'
 const API_URL = BACKEND
+
+// Every browser gets its own isolated simulated world on the backend — two
+// people on the same public demo link no longer see each other's scenario
+// changes or anomalies. The id is generated once and persisted, so a page
+// reload keeps the same world instead of starting a fresh one.
+function getSessionId() {
+  let sid = localStorage.getItem('sentinel_session_id')
+  if (!sid) {
+    sid = crypto.randomUUID()
+    localStorage.setItem('sentinel_session_id', sid)
+  }
+  return sid
+}
+export const SESSION_ID = getSessionId()
+
+const WS_URL = BACKEND.replace(/^http/, 'ws') + `/ws?session=${SESSION_ID}`
 
 // How long to wait for a real backend before switching to demo mode (ms)
 const DEMO_FALLBACK_MS = 8000
@@ -88,7 +103,7 @@ export function useWebSocket() {
   const fetchTimeseries = useCallback(async () => {
     if (isMock.current || !isPageVisible.current) return
     try {
-      const r    = await fetch(`${API_URL}/api/timeseries?minutes=5`)
+      const r    = await fetch(`${API_URL}/api/timeseries?minutes=5`, { headers: { 'X-Session-Id': SESSION_ID } })
       const data = await r.json()
       if (Array.isArray(data) && data.length > 0) {
         setTimeseries(prev => {
@@ -229,7 +244,7 @@ export function useWebSocket() {
     try {
       await fetch(`${API_URL}/api/scenario`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Session-Id': SESSION_ID },
         body:    JSON.stringify({ scenario, intensity }),
       })
     } catch {}
@@ -251,7 +266,7 @@ export function useWebSocket() {
     }
     const r = await fetch(`${API_URL}/api/chat`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Session-Id': SESSION_ID },
       body:    JSON.stringify({ message, history }),
     })
     return r.json()
@@ -262,7 +277,10 @@ export function useWebSocket() {
       await new Promise(r => setTimeout(r, 600))
       return { report: '## Incident Summary\nActive failure scenario detected across 3 services.\n\n## Root Cause\nSee Incidents page for full cascade chain.\n\n## Resolution\nUse scenario controls to restore normal operation.' }
     }
-    const r = await fetch(`${API_URL}/api/incident-report`, { method: 'POST' })
+    const r = await fetch(`${API_URL}/api/incident-report`, {
+      method: 'POST',
+      headers: { 'X-Session-Id': SESSION_ID },
+    })
     return r.json()
   }, [])
 

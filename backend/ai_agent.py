@@ -1,13 +1,20 @@
-from groq import AsyncGroq
 import json
 import os
 from datetime import datetime
+from groq import AsyncGroq
 from db import get_endpoint_stats, get_recent_anomalies
 from anomaly_detector import get_health_snapshot
+from prompt_guard import wrap_if_suspicious, SYSTEM_PROMPT_ADDENDUM
 
+# AsyncGroq is the SDK's native async client (built on httpx.AsyncClient) —
+# network I/O is genuinely non-blocking at the asyncio level, no thread
+# offloading needed. An earlier version of this file used the sync Groq
+# client wrapped in asyncio.to_thread plus a manual threading.Thread +
+# asyncio.Queue bridge for streaming; this is simpler and has no extra
+# moving parts, so it replaced that approach entirely.
 _api_key = os.environ.get("GROQ_API_KEY", "")
 client = AsyncGroq(api_key=_api_key) if _api_key else None
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "openai/gpt-oss-120b"  # llama-3.3-70b-versatile was retired by Groq — see README/commit history
 
 def _get_client():
     global client, _api_key
@@ -33,7 +40,7 @@ When diagnosing a fresh issue, look for:
 1. Error cascades (one service failing causing others to fail)
 2. Latency correlation (slow DB → slow API → user timeouts)
 3. Traffic patterns (sudden spikes, drops, rate limiting)
-4. Service dependencies (root vs downstream victim)"""
+4. Service dependencies (root vs downstream victim)""" + SYSTEM_PROMPT_ADDENDUM
 
 def _build_system_with_context(health: dict, recent_anomalies: list, stats: list) -> str:
     """Inject live system state into the system message so user messages stay clean."""
@@ -61,12 +68,13 @@ async def _generate(prompt: str, max_tokens: int = 600) -> str:
         ],
         max_tokens=max_tokens,
         temperature=0.5,
+        reasoning_effort="low",
     )
     return response.choices[0].message.content
 
-async def analyze_anomaly(anomaly: dict, recent_logs: list[dict]) -> dict:
+async def analyze_anomaly(sid: str, anomaly: dict, recent_logs: list[dict]) -> dict:
     log_summary = _summarize_logs(recent_logs, anomaly["endpoint"])
-    health = get_health_snapshot()
+    health = await get_health_snapshot(sid)
 
     prompt = f"""ANOMALY: {anomaly['anomaly_type']} on {anomaly['endpoint']} — Severity: {anomaly['severity']}
 Description: {anomaly['description']}
@@ -109,38 +117,43 @@ def _clean_history(conversation_history: list[dict]) -> list[dict]:
     return cleaned
 
 
-async def chat_stream(message: str, conversation_history: list[dict]):
+async def chat_stream(sid: str, message: str, conversation_history: list[dict]):
     """Streaming version — yields text chunks as they arrive from Groq."""
-    health          = get_health_snapshot()
-    recent_anomalies = await get_recent_anomalies(10)
-    stats           = await get_endpoint_stats(5)
+    health          = await get_health_snapshot(sid)
+    recent_anomalies = await get_recent_anomalies(sid, 10)
+    stats           = await get_endpoint_stats(sid, 5)
 
     system_with_context = _build_system_with_context(health, recent_anomalies, stats)
 
     messages = [{"role": "system", "content": system_with_context}]
     messages.extend(_clean_history(conversation_history))
-    messages.append({"role": "user", "content": message})
+    messages.append({"role": "user", "content": wrap_if_suspicious(message)})
 
     c = _get_client()
     if not c:
         yield "AI unavailable: GROQ_API_KEY not configured."
         return
-    stream = await c.chat.completions.create(
-        model=MODEL,
-        messages=messages,
-        max_tokens=600,
-        temperature=0.55,
-        stream=True,
-    )
-    async for chunk in stream:
-        delta = chunk.choices[0].delta.content
-        if delta:
-            yield delta
 
-async def chat(message: str, conversation_history: list[dict]) -> str:
-    health = get_health_snapshot()
-    recent_anomalies = await get_recent_anomalies(10)
-    stats = await get_endpoint_stats(5)
+    try:
+        stream = await c.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            max_tokens=600,
+            temperature=0.55,
+            reasoning_effort="low",
+            stream=True,
+        )
+        async for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
+    except Exception as e:
+        yield f"AI error: {e}"
+
+async def chat(sid: str, message: str, conversation_history: list[dict]) -> str:
+    health = await get_health_snapshot(sid)
+    recent_anomalies = await get_recent_anomalies(sid, 10)
+    stats = await get_endpoint_stats(sid, 5)
 
     # Live context goes into the system prompt ONCE — keeps conversation history clean
     # so the model can actually follow the thread instead of re-anchoring on the same data
@@ -152,7 +165,7 @@ async def chat(message: str, conversation_history: list[dict]) -> str:
     messages.extend(_clean_history(conversation_history))
 
     # Current user message — just the raw text, no context injected here
-    messages.append({"role": "user", "content": message})
+    messages.append({"role": "user", "content": wrap_if_suspicious(message)})
 
     c = _get_client()
     if not c:
@@ -162,6 +175,7 @@ async def chat(message: str, conversation_history: list[dict]) -> str:
         messages=messages,
         max_tokens=600,
         temperature=0.55,
+        reasoning_effort="low",
     )
     return response.choices[0].message.content
 

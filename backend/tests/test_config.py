@@ -32,7 +32,7 @@ class TestDefaults:
 
     def test_default_zscore_threshold(self):
         config = _reload_config()
-        assert config.ANOMALY_ZSCORE_THRESHOLD == 2.5
+        assert config.ANOMALY_ZSCORE_THRESHOLD == 3.5
 
     def test_default_error_rate_threshold(self):
         config = _reload_config()
@@ -120,7 +120,7 @@ class TestDefaults:
                 _reload_config()
 
         def test_clear_threshold_not_less_than_detect_zscore_rejected(self, monkeypatch):
-            monkeypatch.setenv('SENTINEL_ANOMALY_ZSCORE_CLEAR_THRESHOLD', '3.0')
+            monkeypatch.setenv('SENTINEL_ANOMALY_ZSCORE_CLEAR_THRESHOLD', '4.0')
             with pytest.raises(ValueError, match='must be less than'):
                 _reload_config()
 
@@ -143,4 +143,4 @@ class TestDefaults:
                 _reload_config()
             monkeypatch.delenv('SENTINEL_ANOMALY_ZSCORE_THRESHOLD', raising=False)
             config = _reload_config()
-            assert config.ANOMALY_ZSCORE_THRESHOLD == 2.5
+            assert config.ANOMALY_ZSCORE_THRESHOLD == 3.5
