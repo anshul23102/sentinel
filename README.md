@@ -199,6 +199,7 @@ DATABASE_URL=postgresql://localhost/sentinel
 REDIS_URL=redis://localhost:6379/0
 ADMIN_API_KEY=            # optional — bypasses rate limiting for X-API-Key requests
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+REQUIRE_API_KEY=          # optional — see "Rate Limiting & CORS" below
 ```
 
 ---
@@ -206,6 +207,8 @@ CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ## Rate Limiting & CORS
 
 The `/api/chat`, `/api/chat/stream`, `/api/scenario`, and `/api/incident-report` endpoints are rate-limited per client IP using a fixed-window counter in Redis (10/min for chat, 20/min for scenario changes, 5/min for incident reports) — these are the only endpoints that either cost Groq API tokens or can disrupt what other simultaneous visitors see. Everything else (health, logs, anomalies, stats, timeseries, the WebSocket feed) stays open and unlimited, since the whole point of this project is a live public demo anyone can watch and try.
+
+If you're running a private or staging deployment instead of a public demo, set `REQUIRE_API_KEY=true` to turn those same four endpoints into a hard lockdown — every caller must then send the matching `ADMIN_API_KEY` as an `X-API-Key` header, not just ones over the rate limit. It's off by default specifically so the public demo experience (anyone can click "DB Slowdown" and ask the assistant a question) isn't broken by default.
 
 `CORS_ORIGINS` restricts which browser origins may call the API — set this to your deployed frontend URL in production rather than using `*`.
 

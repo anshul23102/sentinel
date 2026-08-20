@@ -77,3 +77,31 @@ async def test_respects_x_forwarded_for():
     with pytest.raises(HTTPException):
         # same forwarded client should be limited even though req.client.host differs
         await dep(_FakeRequest(ip="10.0.0.1", headers={"x-forwarded-for": "203.0.113.5, 10.0.0.1"}))
+
+
+# require_api_key: an optional hard gate on top of rate limiting, off by
+# default (see ratelimit.py's docstring for why — rate limiting alone is the
+# public-demo-friendly default; this is for a private/staging lockdown).
+
+@pytest.mark.asyncio
+async def test_require_api_key_is_a_noop_by_default(monkeypatch):
+    monkeypatch.setattr(ratelimit, "REQUIRE_API_KEY", False)
+    await ratelimit.require_api_key(_FakeRequest())  # must not raise, no header needed
+
+
+@pytest.mark.asyncio
+async def test_require_api_key_rejects_missing_or_wrong_key_when_enabled(monkeypatch):
+    monkeypatch.setattr(ratelimit, "REQUIRE_API_KEY", True)
+    monkeypatch.setattr(ratelimit, "ADMIN_API_KEY", "secret-test-key")
+    with pytest.raises(HTTPException) as exc_info:
+        await ratelimit.require_api_key(_FakeRequest())
+    assert exc_info.value.status_code == 401
+    with pytest.raises(HTTPException):
+        await ratelimit.require_api_key(_FakeRequest(headers={"x-api-key": "wrong"}))
+
+
+@pytest.mark.asyncio
+async def test_require_api_key_accepts_the_correct_key_when_enabled(monkeypatch):
+    monkeypatch.setattr(ratelimit, "REQUIRE_API_KEY", True)
+    monkeypatch.setattr(ratelimit, "ADMIN_API_KEY", "secret-test-key")
+    await ratelimit.require_api_key(_FakeRequest(headers={"x-api-key": "secret-test-key"}))  # must not raise

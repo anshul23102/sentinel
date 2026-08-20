@@ -4,7 +4,12 @@ from fastapi import Request, HTTPException
 
 import state
 
-ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
+ADMIN_API_KEY   = os.environ.get("ADMIN_API_KEY", "")
+# Off by default so the public demo stays interactive for anonymous visitors
+# (rate limiting above is the always-on protection for that case). Set this
+# to require ADMIN_API_KEY on every guarded route instead — for a private or
+# staging deployment where you want a hard lockdown, not just throttling.
+REQUIRE_API_KEY = os.environ.get("REQUIRE_API_KEY", "").lower() in ("1", "true", "yes")
 
 def _client_ip(request: Request) -> str:
     # Respect a trusted reverse proxy's forwarded header if present (Render/Vercel
@@ -45,3 +50,14 @@ def rate_limit(bucket: str, limit: int, window_seconds: int):
                 headers={"Retry-After": str(max(ttl, 1))},
             )
     return _dependency
+
+
+async def require_api_key(request: Request) -> None:
+    """Optional hard gate for the same guarded routes — a no-op unless
+    REQUIRE_API_KEY is enabled, so the default stays the public-demo
+    experience. When enabled, every caller (not just ones over the rate
+    limit) must carry the matching X-API-Key header."""
+    if not REQUIRE_API_KEY:
+        return
+    if not ADMIN_API_KEY or request.headers.get("x-api-key") != ADMIN_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")

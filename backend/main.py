@@ -18,7 +18,7 @@ from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stat
 from log_generator import run_generator, set_scenario, get_current_scenario, SCENARIOS, SIM_DAY_SECONDS, BUCKETS_PER_DAY
 from anomaly_detector import process_log_batch, get_health_snapshot, run_anomaly_scan
 from ai_agent import analyze_anomaly, chat, chat_stream, generate_incident_report
-from ratelimit import rate_limit
+from ratelimit import rate_limit, require_api_key
 import session_manager
 import state
 
@@ -188,7 +188,7 @@ class ScenarioRequest(BaseModel):
     scenario: str
     intensity: float = 1.0
 
-@app.post("/api/scenario", dependencies=[Depends(rate_limit("scenario", limit=20, window_seconds=60))])
+@app.post("/api/scenario", dependencies=[Depends(rate_limit("scenario", limit=20, window_seconds=60)), Depends(require_api_key)])
 async def inject_scenario(req: ScenarioRequest, sid: str = Depends(get_session_id)):
     if req.scenario not in SCENARIOS:
         raise HTTPException(400, f"Unknown scenario. Valid: {list(SCENARIOS.keys())}")
@@ -207,12 +207,12 @@ class ChatRequest(BaseModel):
     message: str = Field(..., max_length=2000)
     history: list[dict] = []
 
-@app.post("/api/chat", dependencies=[Depends(rate_limit("chat", limit=10, window_seconds=60))])
+@app.post("/api/chat", dependencies=[Depends(rate_limit("chat", limit=10, window_seconds=60)), Depends(require_api_key)])
 async def chat_endpoint(req: ChatRequest, sid: str = Depends(get_session_id)):
     response = await chat(sid, req.message, req.history)
     return {"response": response}
 
-@app.post("/api/chat/stream", dependencies=[Depends(rate_limit("chat", limit=10, window_seconds=60))])
+@app.post("/api/chat/stream", dependencies=[Depends(rate_limit("chat", limit=10, window_seconds=60)), Depends(require_api_key)])
 async def chat_stream_endpoint(req: ChatRequest, sid: str = Depends(get_session_id)):
     """Server-Sent Events streaming chat — tokens arrive as they're generated."""
     async def event_generator():
@@ -233,7 +233,7 @@ async def chat_stream_endpoint(req: ChatRequest, sid: str = Depends(get_session_
         }
     )
 
-@app.post("/api/incident-report", dependencies=[Depends(rate_limit("incident-report", limit=5, window_seconds=60))])
+@app.post("/api/incident-report", dependencies=[Depends(rate_limit("incident-report", limit=5, window_seconds=60)), Depends(require_api_key)])
 async def incident_report(sid: str = Depends(get_session_id)):
     anomalies_data = await get_recent_anomalies(sid, 20)
     if not anomalies_data:
