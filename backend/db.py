@@ -9,7 +9,13 @@ _pool: asyncpg.Pool | None = None
 
 async def init_db():
     global _pool
-    _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10)
+    # command_timeout bounds how long any single query can hold a checked-out
+    # connection. Without it, a hung or unusually slow query holds its
+    # connection forever, and since this pool is a fixed size, enough of
+    # those eventually starve every other caller waiting on pool.acquire()
+    # indefinitely too — a saturated pool should fail loudly, not hang the
+    # whole process.
+    _pool = await asyncpg.create_pool(DATABASE_URL, min_size=2, max_size=10, command_timeout=30)
     async with _pool.acquire() as conn:
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS logs (
