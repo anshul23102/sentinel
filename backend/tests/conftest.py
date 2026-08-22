@@ -45,9 +45,30 @@ def sid() -> str:
 
 @pytest_asyncio.fixture(autouse=True)
 async def _cleanup(sid):
-    """Runs after every test: drop this test's rows/keys so the test DB and
-    test Redis DB don't grow across a full suite run."""
+    """Runs after every test: drop this test's rows/keys, and — critically —
+    stop any real background session this test may have created by hitting
+    the FastAPI app directly (main.get_session_id / the websocket route).
+
+    Every one of those spins up a log_pipeline + periodic_scan task that
+    otherwise keeps running for the rest of the entire suite (this file's
+    fixtures run on one shared, session-scoped event loop per
+    asyncio_default_fixture_loop_scope in pytest.ini — nothing tears a
+    background task down just because the test that triggered it returned).
+    Deleting rows/keys without also stopping the producer that keeps writing
+    new ones just meant the next test's cleanup had one more live pipeline
+    to compete against, compounding every test after it. Import main lazily
+    inside the fixture, not at module scope — main.py has real side effects
+    on import (registering routes, building the FastAPI app) that no test
+    file should trigger just by being collected.
+    """
     yield
+    import main
+    import session_manager
+    try:
+        await main._cleanup_session(sid)
+    except Exception:
+        pass
+    session_manager._sessions.pop(sid, None)
     try:
         await db.delete_session_data(sid)
     except Exception:
