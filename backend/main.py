@@ -28,6 +28,15 @@ import state  # noqa: E402
 
 BUCKET_SECONDS = SIM_DAY_SECONDS // BUCKETS_PER_DAY
 
+# Synthetic traffic rate per session's log_pipeline. 30 rps is the real
+# demo/production rate. Every unique session id — including a throwaway one
+# a test creates just to check an HTTP status code — runs this generator
+# continuously in the background until reaped, so a low-traffic environment
+# like CI (a handful of concurrently-active sessions, but each generating
+# real Redis writes at full rate) benefits from being able to turn this
+# down without changing the actual demo experience for real visitors.
+LOG_RPS = int(os.environ.get("SENTINEL_LOG_RPS", "30"))
+
 # One supervisor for every session's background tasks — register()/start_task()
 # per session with a unique name, stop_task() on reap. Auto-restarts a crashed
 # log_pipeline/periodic_scan with exponential backoff instead of leaving that
@@ -144,7 +153,7 @@ async def log_pipeline(sid: str):
                 )
         await manager.broadcast(sid, message)
 
-    await run_generator(sid, broadcast_and_detect, rps=30)
+    await run_generator(sid, broadcast_and_detect, rps=LOG_RPS)
 
 async def _async_ai_analysis(sid: str, anomaly: dict):
     """Run AI root cause analysis in background and broadcast result."""

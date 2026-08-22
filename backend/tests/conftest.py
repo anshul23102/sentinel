@@ -23,6 +23,16 @@ os.environ.setdefault("GROQ_API_KEY", "")  # tests must not require a real key
 # production because trusting a client-supplied header unconditionally
 # lets any real caller bypass rate limiting by sending a fresh fake IP.
 os.environ.setdefault("TRUST_PROXY_HEADERS", "true")
+# No test asserts on live synthetic traffic — they check status codes and
+# response shapes, constructing whatever log/anomaly data they need
+# directly through db.py/state.py. But every session created by hitting the
+# real app (test_api.py, test_session_security.py) otherwise runs a real
+# 30 req/s traffic generator in the background regardless, each doing
+# several Postgres/Redis writes per second until that test's cleanup stops
+# it — pure overhead here, and enough of it running concurrently is what
+# caused CI's Postgres/Redis service containers to fall behind and the
+# whole suite to hang. See main.py's LOG_RPS.
+os.environ.setdefault("SENTINEL_LOG_RPS", "0")
 
 import pytest
 import pytest_asyncio

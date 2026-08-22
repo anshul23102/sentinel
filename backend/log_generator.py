@@ -182,10 +182,20 @@ def _generate_log(sid: str, scenario_state: dict, latency_mult: float = 1.0):
 async def run_generator(sid: str, broadcast_fn, rps: int = 30):
     """Generate logs at ~rps/second with realistic traffic burst patterns,
     for one session's isolated simulated world. Runs until cancelled by the
-    session manager when this session goes idle."""
+    session manager when this session goes idle.
+
+    rps=0 means no synthetic traffic at all — every log batch is empty, so
+    this only costs a cheap sleep loop instead of real Postgres/Redis writes
+    every second. Used for sessions that exist purely to be a session (a
+    test hitting an endpoint just to check a status code has no use for
+    live traffic; the demo UI always passes a real rps)."""
     tick = 0
     while True:
         tick += 1
+        if rps <= 0:
+            await broadcast_fn({"type": "logs", "data": []})
+            await asyncio.sleep(1)
+            continue
         # Simulate realistic burst: +/-20% jitter per second
         jitter = random.randint(-rps // 5, rps // 5)
         # Occasional traffic spike (every ~30s) to simulate real usage patterns
