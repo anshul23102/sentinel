@@ -6,15 +6,36 @@ zero open connections for a while — a public demo link accumulates visitors
 who never come back, and their tasks/data shouldn't run and grow forever.
 """
 import asyncio
+import os
 import time
 
 IDLE_TIMEOUT = 300  # 5 min with zero WebSocket connections before reaping
 
+# Hard ceiling on concurrent simulated worlds. Each session runs its own
+# background traffic generator + detector loop and holds Postgres/Redis
+# connections — with no cap, any caller who can send an unauthenticated
+# request with a fresh session id (which is every caller, by design, for
+# anonymous demo visitors) can create sessions as fast as the process can
+# schedule them, exhausting the Postgres pool, Redis memory, and CPU long
+# before the 5-minute idle reaper ever runs. This caps the worst case
+# regardless of how many source IPs an attacker spreads across — the
+# per-IP creation rate limit in main.py is the first line of defense,
+# this is the backstop.
+MAX_SESSIONS = int(os.environ.get("MAX_SESSIONS", "500"))
+
 _sessions: dict[str, dict] = {}  # sid -> {"tasks": [Task], "connections": int, "last_active": float}
+
+
+class CapacityExceeded(Exception):
+    """Raised when a brand-new session would push past MAX_SESSIONS.
+    Never raised for a sid that already has an entry — only refuses new
+    worlds, existing visitors are never evicted to make room."""
 
 
 def _entry(sid: str) -> dict:
     if sid not in _sessions:
+        if len(_sessions) >= MAX_SESSIONS:
+            raise CapacityExceeded(f"at capacity ({MAX_SESSIONS} concurrent sessions)")
         _sessions[sid] = {"tasks": [], "connections": 0, "last_active": time.time()}
     return _sessions[sid]
 
@@ -33,6 +54,13 @@ async def ensure_running(sid: str, start_fn) -> None:
     entry["last_active"] = time.time()
     if not entry["tasks"]:
         entry["tasks"] = await start_fn()
+
+
+def session_exists(sid: str) -> bool:
+    """Whether this sid already has a live entry — used to tell a returning
+    visitor apart from a brand-new one before touch()/ensure_running() would
+    otherwise create the entry as a side effect."""
+    return sid in _sessions
 
 
 def connection_opened(sid: str) -> None:

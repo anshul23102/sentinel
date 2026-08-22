@@ -15,7 +15,15 @@ fi
 cd backend
 cp .env.example .env 2>/dev/null || true
 echo "Starting FastAPI backend on :8000..."
-uvicorn main:app --reload --port 8000 &
+# --forwarded-allow-ips="" disables uvicorn's own independent trust of
+# X-Forwarded-For from loopback connections (its default). Without this,
+# uvicorn rewrites request.client.host from that header for any request
+# arriving via 127.0.0.1 regardless of the app-level TRUST_PROXY_HEADERS
+# setting in ratelimit.py — two separate, independent "trust this header"
+# switches is exactly how a rate-limit bypass slips through unnoticed.
+# TRUST_PROXY_HEADERS is the one and only toggle; set it (not this flag)
+# when deploying behind a real reverse proxy.
+uvicorn main:app --reload --port 8000 --forwarded-allow-ips="" &
 BACKEND_PID=$!
 
 # Start frontend

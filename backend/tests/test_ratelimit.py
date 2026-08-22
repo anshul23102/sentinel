@@ -39,6 +39,50 @@ async def test_blocks_requests_over_the_limit_with_429():
     assert "Retry-After" in exc_info.value.headers
 
 
+# _client_ip / TRUST_PROXY_HEADERS: X-Forwarded-For is a plain client-supplied
+# header unless something in front of this process is known to overwrite it.
+# Trusting it unconditionally lets any caller mint a fresh IP on every
+# request and bypass rate limiting entirely — see ratelimit.py's comment on
+# TRUST_PROXY_HEADERS. Covered directly here since conftest.py enables it for
+# the rest of the suite (tests use X-Forwarded-For to get independent
+# buckets), so this module attribute is already True by the time these run.
+
+def test_client_ip_ignores_forwarded_header_when_proxy_not_trusted(monkeypatch):
+    monkeypatch.setattr(ratelimit, "TRUST_PROXY_HEADERS", False)
+    req = _FakeRequest(ip="9.9.9.9", headers={"x-forwarded-for": "1.1.1.1"})
+    assert ratelimit._client_ip(req) == "9.9.9.9"
+
+
+def test_client_ip_uses_forwarded_header_when_proxy_trusted(monkeypatch):
+    monkeypatch.setattr(ratelimit, "TRUST_PROXY_HEADERS", True)
+    req = _FakeRequest(ip="9.9.9.9", headers={"x-forwarded-for": "1.1.1.1, 9.9.9.9"})
+    assert ratelimit._client_ip(req) == "1.1.1.1"
+
+
+# _api_key_matches: must be constant-time (hmac.compare_digest), not `==`,
+# so response timing can't leak how many leading characters of a guess
+# matched the real key.
+
+@pytest.mark.asyncio
+async def test_api_key_matches_accepts_correct_key(monkeypatch):
+    monkeypatch.setattr(ratelimit, "ADMIN_API_KEY", "secret-test-key")
+    req = _FakeRequest(headers={"x-api-key": "secret-test-key"})
+    assert ratelimit._api_key_matches(req) is True
+
+
+@pytest.mark.asyncio
+async def test_api_key_matches_rejects_wrong_or_missing_key(monkeypatch):
+    monkeypatch.setattr(ratelimit, "ADMIN_API_KEY", "secret-test-key")
+    assert ratelimit._api_key_matches(_FakeRequest(headers={"x-api-key": "wrong"})) is False
+    assert ratelimit._api_key_matches(_FakeRequest(headers={})) is False
+
+
+def test_api_key_matches_is_false_when_no_admin_key_configured(monkeypatch):
+    monkeypatch.setattr(ratelimit, "ADMIN_API_KEY", "")
+    req = _FakeRequest(headers={"x-api-key": "anything"})
+    assert ratelimit._api_key_matches(req) is False
+
+
 @pytest.mark.asyncio
 async def test_different_ips_have_independent_limits():
     dep = ratelimit.rate_limit(_unique_bucket(), limit=2, window_seconds=60)

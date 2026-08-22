@@ -3,13 +3,14 @@ import csv
 import io
 import json
 import os
+import re
 import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import Depends, FastAPI, Header, Request, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -78,13 +79,37 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # ── Session identity ────────────────────────────────────────────────────────
-async def get_session_id(x_session_id: Optional[str] = Header(None)) -> str:
+# A caller can put whatever string it wants in X-Session-Id — the frontend
+# always sends a crypto.randomUUID(), but nothing on the wire enforces that.
+# Bound the shape so a hostile caller can't hand this process an arbitrarily
+# large or control-character-laden key that ends up embedded in Redis keys
+# and Postgres rows on every downstream write.
+_SID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+# Every unauthenticated caller can mint a brand-new session id and get one
+# for free — that's the point, for anonymous demo visitors. But an unbounded
+# rate of *new* sessions each spins up its own traffic generator + detector
+# background tasks and Postgres/Redis footprint, so without a limit here a
+# single script looping with a fresh id per request exhausts the process
+# long before the idle reaper (session_manager.IDLE_TIMEOUT) ever runs.
+# This only throttles *creating* a new world — a returning visitor touching
+# their existing session is never rate-limited by it.
+_new_session_rate_limit = rate_limit("new_session", limit=10, window_seconds=60)
+
+async def get_session_id(request: Request, x_session_id: Optional[str] = Header(None)) -> str:
     """Every REST call and WebSocket connection resolves to a session id.
     The frontend generates one UUID per browser and sends it on every
     request; a caller with no header (curl, a fresh test) gets a fresh
     ephemeral session rather than falling into one shared global world."""
     sid = x_session_id or str(uuid.uuid4())
-    await _ensure_session(sid)
+    if not _SID_PATTERN.match(sid):
+        raise HTTPException(400, "Invalid session id")
+    if not session_manager.session_exists(sid):
+        await _new_session_rate_limit(request)
+    try:
+        await _ensure_session(sid)
+    except session_manager.CapacityExceeded:
+        raise HTTPException(503, "Sentinel is at capacity — please try again shortly")
     session_manager.touch(sid)
     return sid
 
@@ -191,7 +216,12 @@ app.add_middleware(
 )
 
 # REST endpoints
-@app.get("/api/health")
+# GET routes are read-only but were previously completely unguarded — no
+# auth, no rate limit — while every mutating/AI-cost route already had one.
+# A generous per-IP limit here still stops unbounded scraping/DoS without
+# affecting normal dashboard polling (the WebSocket carries most live
+# updates; these are occasional fetches, not a tight poll loop).
+@app.get("/api/health", dependencies=[Depends(rate_limit("health", limit=120, window_seconds=60))])
 async def health(sid: str = Depends(get_session_id)):
     health_data = dict(await get_health_snapshot(sid))
     pipeline_status = supervisor.get_task_status(f"log_pipeline:{sid}")
@@ -204,23 +234,23 @@ async def health(sid: str = Depends(get_session_id)):
     }
     return health_data
 
-@app.get("/api/logs")
+@app.get("/api/logs", dependencies=[Depends(rate_limit("logs", limit=60, window_seconds=60))])
 async def logs(limit: int = 100, endpoint: Optional[str] = None, sid: str = Depends(get_session_id)):
     return await get_recent_logs(sid, limit, endpoint)
 
-@app.get("/api/anomalies")
+@app.get("/api/anomalies", dependencies=[Depends(rate_limit("anomalies", limit=60, window_seconds=60))])
 async def anomalies(limit: int = 20, sid: str = Depends(get_session_id)):
     return await get_recent_anomalies(sid, limit)
 
-@app.get("/api/stats")
+@app.get("/api/stats", dependencies=[Depends(rate_limit("stats", limit=60, window_seconds=60))])
 async def stats(minutes: int = 5, sid: str = Depends(get_session_id)):
     return await get_endpoint_stats(sid, minutes)
 
-@app.get("/api/timeseries")
+@app.get("/api/timeseries", dependencies=[Depends(rate_limit("timeseries", limit=60, window_seconds=60))])
 async def timeseries(minutes: int = 10, sid: str = Depends(get_session_id)):
     return await get_timeseries(sid, minutes)
 
-@app.get("/api/scenario")
+@app.get("/api/scenario", dependencies=[Depends(rate_limit("scenario-get", limit=60, window_seconds=60))])
 async def get_scenario(sid: str = Depends(get_session_id)):
     return {"current": await get_current_scenario(sid), "available": list(SCENARIOS.keys())}
 
@@ -281,7 +311,7 @@ async def incident_report(sid: str = Depends(get_session_id)):
     report = await generate_incident_report(anomalies_data, 10)
     return {"report": report}
 
-@app.get("/api/incidents/export")
+@app.get("/api/incidents/export", dependencies=[Depends(rate_limit("export", limit=10, window_seconds=60))])
 async def export_incidents(format: str = "csv", limit: int = 1000, sid: str = Depends(get_session_id)):
     # Bound the export so it can't materialize an unbounded result — same
     # clamp db.py applies at the query boundary, enforced again here since
@@ -319,7 +349,22 @@ async def export_incidents(format: str = "csv", limit: int = 1000, sid: str = De
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket, session: Optional[str] = None):
     sid = session or str(uuid.uuid4())
-    await _ensure_session(sid)
+    if not _SID_PATTERN.match(sid):
+        await ws.close(code=1008)  # policy violation
+        return
+    try:
+        # rate_limit()'s dependency only reads .headers / .client — a
+        # WebSocket exposes the same shape as Request, so it works unchanged
+        # here despite being written for HTTP routes.
+        if not session_manager.session_exists(sid):
+            await _new_session_rate_limit(ws)
+        await _ensure_session(sid)
+    except HTTPException:
+        await ws.close(code=1008)  # too many new sessions from this IP
+        return
+    except session_manager.CapacityExceeded:
+        await ws.close(code=1013)  # try again later
+        return
     session_manager.connection_opened(sid)
     await manager.connect(sid, ws)
     try:

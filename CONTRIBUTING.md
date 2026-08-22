@@ -24,7 +24,7 @@ cd backend
 pip install -r requirements.txt
 cp .env.example .env
 # Add your GROQ_API_KEY to .env
-python3 -m uvicorn main:app --port 8000 --host 0.0.0.0
+python3 -m uvicorn main:app --port 8000 --host 0.0.0.0 --forwarded-allow-ips=""
 ```
 
 ### Frontend

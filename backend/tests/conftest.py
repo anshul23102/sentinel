@@ -15,6 +15,14 @@ import uuid
 os.environ.setdefault("DATABASE_URL", "postgresql://localhost/sentinel_test")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/1")
 os.environ.setdefault("GROQ_API_KEY", "")  # tests must not require a real key
+# The test client is a single fake "connection" for every test, so without
+# this, all tests would share one rate-limit bucket per real client IP.
+# Tests deliberately set X-Forwarded-For to their own sid to get an
+# independent bucket per test — safe here since the test process is the
+# only thing ever calling itself, but ratelimit.py defaults this off in
+# production because trusting a client-supplied header unconditionally
+# lets any real caller bypass rate limiting by sending a fresh fake IP.
+os.environ.setdefault("TRUST_PROXY_HEADERS", "true")
 
 import pytest
 import pytest_asyncio

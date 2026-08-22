@@ -148,7 +148,12 @@ async def chat_stream(sid: str, message: str, conversation_history: list[dict]):
             if delta:
                 yield delta
     except Exception as e:
-        yield f"AI error: {e}"
+        # Log the real exception server-side but never echo it to the
+        # client — a raw exception message from an HTTP client library can
+        # incidentally include request details, and there's no reason to
+        # hand an attacker probing this endpoint any internal information.
+        print(f"[AI] chat_stream failed: {type(e).__name__}: {e}")
+        yield "AI error: something went wrong generating a response. Please try again."
 
 async def chat(sid: str, message: str, conversation_history: list[dict]) -> str:
     health = await get_health_snapshot(sid)

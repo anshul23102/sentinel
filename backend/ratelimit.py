@@ -1,3 +1,4 @@
+import hmac
 import os
 import time
 from fastapi import Request, HTTPException
@@ -11,12 +12,29 @@ ADMIN_API_KEY   = os.environ.get("ADMIN_API_KEY", "")
 # staging deployment where you want a hard lockdown, not just throttling.
 REQUIRE_API_KEY = os.environ.get("REQUIRE_API_KEY", "").lower() in ("1", "true", "yes")
 
+# Off by default — X-Forwarded-For is a plain client-supplied header unless
+# something in front of this process actually sets it and strips any
+# value the caller tried to send. Trusting it unconditionally lets any
+# caller put an arbitrary value there and get a fresh rate-limit bucket on
+# every request, i.e. bypass the limiter entirely. Only enable this when
+# deployed behind a reverse proxy (Render/Vercel/nginx/etc.) that you've
+# confirmed overwrites X-Forwarded-For rather than appending to it.
+TRUST_PROXY_HEADERS = os.environ.get("TRUST_PROXY_HEADERS", "").lower() in ("1", "true", "yes")
+
+def _api_key_matches(request: Request) -> bool:
+    """Constant-time comparison — a plain == leaks timing information about
+    how many leading characters matched, which is a textbook side channel
+    for recovering a secret one byte at a time."""
+    if not ADMIN_API_KEY:
+        return False
+    supplied = request.headers.get("x-api-key", "")
+    return hmac.compare_digest(supplied, ADMIN_API_KEY)
+
 def _client_ip(request: Request) -> str:
-    # Respect a trusted reverse proxy's forwarded header if present (Render/Vercel
-    # style deploys); falls back to the direct connection for local dev.
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    if TRUST_PROXY_HEADERS:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 def rate_limit(bucket: str, limit: int, window_seconds: int):
@@ -31,7 +49,7 @@ def rate_limit(bucket: str, limit: int, window_seconds: int):
     self-throttled while anonymous visitors still get the guard.
     """
     async def _dependency(request: Request):
-        if ADMIN_API_KEY and request.headers.get("x-api-key") == ADMIN_API_KEY:
+        if _api_key_matches(request):
             return
         ip = _client_ip(request)
         window = int(time.time() // window_seconds)
@@ -59,5 +77,5 @@ async def require_api_key(request: Request) -> None:
     limit) must carry the matching X-API-Key header."""
     if not REQUIRE_API_KEY:
         return
-    if not ADMIN_API_KEY or request.headers.get("x-api-key") != ADMIN_API_KEY:
+    if not _api_key_matches(request):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")

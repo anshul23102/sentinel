@@ -12,11 +12,13 @@ services:
   frontend:
     build:
       context: ./frontend
+      # Vite inlines VITE_* values into the built bundle at build time, not
+      # at container runtime — an `environment:` entry here would have no
+      # effect on the static files nginx serves, so it has to be a build arg.
+      args:
+        VITE_BACKEND_URL: http://localhost:8000
     ports:
-      - "5173:5173"
+      - "8080:8080"
     depends_on:
       - backend
-    environment:
-       VITE_BACKEND_URL: http://localhost:8000
     restart: unless-stopped
-    
