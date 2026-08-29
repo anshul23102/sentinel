@@ -34,6 +34,15 @@ def _validate_zscore(value: float, name: str) -> float:
     return value
 
 
+def _validate_slo_target(value: float, name: str) -> float:
+    if not (0.0 < value < 1.0):
+        raise ValueError(
+            f"{name} must be strictly between 0 and 1 (got {value}). "
+            f"An SLO target of 1.0 would leave no error budget."
+        )
+    return value
+
+
 def _validate_rate(value: float, name: str, max_value: float = 1.0) -> float:
     if not (0.0 <= value <= max_value):
         raise ValueError(
@@ -71,6 +80,15 @@ ANOMALY_ERROR_RATE_THRESHOLD: float = _load_float(
     "SENTINEL_ANOMALY_ERROR_RATE_THRESHOLD",
     0.15,
     lambda v, n: _validate_rate(v, n),
+)
+
+#: Target success ratio for the service-level objective, used to compute the
+#: error budget and burn rate in the health snapshot. Must be strictly between
+#: 0 and 1 (e.g. 0.99 = "99% of requests should succeed").
+SLO_TARGET: float = _load_float(
+    "SENTINEL_SLO_TARGET",
+    0.99,
+    _validate_slo_target,
 )
 
 #: Minimum average latency (ms) that must be exceeded for a latency spike to be considered.

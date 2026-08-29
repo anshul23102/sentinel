@@ -12,7 +12,9 @@ from config import (
     ANOMALY_ERROR_RATE_THRESHOLD as ERROR_RATE_THRESHOLD,
     ANOMALY_ERROR_RATE_CLEAR_THRESHOLD as ERROR_RATE_CLEAR_THRESHOLD,
     ANOMALY_LATENCY_THRESHOLD_MS,
+    SLO_TARGET,
 )
+from slo import error_budget_remaining, burn_rate
 
 # MAD_Z_THRESHOLD default (3.5) is the standard cutoff for the modified
 # z-score (Iglewicz & Hoaglin, "How to Detect and Handle Outliers", 1993) —
@@ -332,6 +334,8 @@ async def get_health_snapshot(sid: str) -> dict:
             "p95_latency_ms": p95,
             "error_rate":     round(err_rate, 3),
             "uptime_pct":     uptime,
+            "error_budget_remaining_pct": round(error_budget_remaining(SLO_TARGET, uptime / 100) * 100, 1),
+            "burn_rate":      round(burn_rate(SLO_TARGET, err_rate), 2),
             "sample_size":    len(latency_window),
         }
     return snapshot
