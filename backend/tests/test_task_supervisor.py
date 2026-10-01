@@ -423,6 +423,47 @@ class TestCancellation:
         # Clean up
         await supervisor.shutdown()
 
+    @pytest.mark.asyncio
+    async def test_shutdown_stops_mid_backoff_restart(self, supervisor):
+        """A crash that is sleeping in its restart backoff window must never
+        restart once shutdown() begins.
+
+        This is the trickiest graceful-shutdown case: the task is not running
+        user code at that moment — it is parked between restart attempts, so
+        it can neither notice nor interrupt the shutdown signal itself. The
+        shutdown guard must therefore both (a) cancel the in-flight backoff
+        sleep and (b) ensure the post-sleep ``_shutting_down`` check cancels
+        the pending restart instead of letting it fire.
+        """
+        attempts = [0]
+
+        async def always_crashes():
+            attempts[0] += 1
+            raise ValueError("simulated crash; never succeeds")
+
+        supervisor.register("flaky", always_crashes)
+        await supervisor.start_task("flaky")
+
+        # Wait until the task has crashed at least once and is parked in its
+        # backoff delay (first delay = initial_backoff * multiplier = 0.2s),
+        # i.e. before its first restart attempt would be scheduled.
+        await asyncio.sleep(0.15)
+        assert attempts[0] >= 1, "task should have crashed once by now"
+
+        attempts_before_shutdown = attempts[0]
+
+        # Shut down while the task is still inside its backoff window.
+        await supervisor.shutdown()
+
+        # Give the (now cancelled) task long enough to have woken up if a
+        # restart had been scheduled — it must not be restarted.
+        await asyncio.sleep(0.25)
+
+        assert attempts[0] == attempts_before_shutdown, (
+            "a crash awaiting restart must not run again after shutdown"
+        )
+        assert supervisor.get_task_status("flaky")["running"] is False
+
 
 # ===========================================================================
 # Multiple Tasks Supervision
