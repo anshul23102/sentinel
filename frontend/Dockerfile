@@ -3,7 +3,7 @@
 # Vite's development server — Vite's own docs are explicit that it is not
 # hardened for public exposure and should never be the thing the internet
 # talks to. This produces an actual production artifact instead.
-FROM node:20-alpine AS build
+FROM node:25-alpine AS build
 
 WORKDIR /app
 
