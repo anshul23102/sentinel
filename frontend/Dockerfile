@@ -23,7 +23,7 @@ RUN npm run build
 # master process still runs as root (only its worker processes drop
 # privileges); this one never runs as root at all, and binds 8080 instead
 # of 80 since low ports need root to bind.
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 
 COPY --from=build /app/dist /usr/share/nginx/html
 
