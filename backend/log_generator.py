@@ -190,33 +190,41 @@ async def run_generator(sid: str, broadcast_fn, rps: int = 30):
     test hitting an endpoint just to check a status code has no use for
     live traffic; the demo UI always passes a real rps)."""
     tick = 0
+    next_tick = time.monotonic()
     while True:
         tick += 1
+        next_tick += 1.0
         if rps <= 0:
             await broadcast_fn({"type": "logs", "data": []})
-            await asyncio.sleep(1)
-            continue
-        # Simulate realistic burst: +/-20% jitter per second
-        jitter = random.randint(-rps // 5, rps // 5)
-        # Occasional traffic spike (every ~30s) to simulate real usage patterns
-        if tick % 30 == 0:
-            jitter = rps // 3
-        traffic_mult, latency_mult = seasonal_multiplier()
-        count = max(4, round((rps + jitter) * traffic_mult))
+        else:
+            # Simulate realistic burst: +/-20% jitter per second
+            jitter = random.randint(-rps // 5, rps // 5)
+            # Occasional traffic spike (every ~30s) to simulate real usage patterns
+            if tick % 30 == 0:
+                jitter = rps // 3
+            traffic_mult, latency_mult = seasonal_multiplier()
+            count = max(4, round((rps + jitter) * traffic_mult))
 
-        # Read scenario state from Redis once per tick, not once per log —
-        # keeps the hot path from hammering Redis dozens of times a second.
-        scenario_state = await state.get_scenario(sid)
-        batch = [_generate_log(sid, scenario_state, latency_mult) for _ in range(count)]
-        await bulk_insert_logs(sid, batch)
-        # Slim payload for WS broadcast — strip metadata/user_id (never rendered)
-        slim = [{
-            "timestamp":   log["timestamp"],
-            "endpoint":    log["endpoint"],
-            "method":      log["method"],
-            "status_code": log["status_code"],
-            "latency_ms":  log["latency_ms"],
-            "error_message": log.get("error_message"),
-        } for log in batch]
-        await broadcast_fn({"type": "logs", "data": slim})
-        await asyncio.sleep(1)
+            # Read scenario state from Redis once per tick, not once per log —
+            # keeps the hot path from hammering Redis dozens of times a second.
+            scenario_state = await state.get_scenario(sid)
+            batch = [_generate_log(sid, scenario_state, latency_mult) for _ in range(count)]
+            await bulk_insert_logs(sid, batch)
+            # Slim payload for WS broadcast — strip metadata/user_id (never rendered)
+            slim = [{
+                "timestamp":   log["timestamp"],
+                "endpoint":    log["endpoint"],
+                "method":      log["method"],
+                "status_code": log["status_code"],
+                "latency_ms":  log["latency_ms"],
+                "error_message": log.get("error_message"),
+            } for log in batch]
+            await broadcast_fn({"type": "logs", "data": slim})
+
+        # Decouple sleep timer from DB insertion and broadcast latency
+        # to prevent cumulative clock drift and maintain strict 1s cadence.
+        now = time.monotonic()
+        sleep_duration = max(0.0, next_tick - now)
+        if now > next_tick:
+            next_tick = now
+        await asyncio.sleep(sleep_duration)
