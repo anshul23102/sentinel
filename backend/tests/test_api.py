@@ -98,3 +98,36 @@ async def test_incident_report_handles_no_anomalies(client, sid):
     r = await client.post("/api/incident-report", headers=_sid_header(sid))
     assert r.status_code == 200
     assert "report" in r.json()
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator probes: /healthz (liveness) and /readyz (readiness)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_healthz_is_ok_and_creates_no_session(client):
+    import session_manager
+    before = session_manager.active_session_count()
+    for _ in range(5):
+        r = await client.get("/healthz")
+        assert r.status_code == 200 and r.json() == {"status": "ok"}
+    assert session_manager.active_session_count() == before  # probes must never mint sessions
+
+
+@pytest.mark.asyncio
+async def test_readyz_reports_ready_when_postgres_and_redis_are_up(client):
+    r = await client.get("/readyz")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ready", "checks": {"postgres": "ok", "redis": "ok"}}
+
+
+@pytest.mark.asyncio
+async def test_readyz_returns_503_when_a_dependency_is_down(client, monkeypatch):
+    async def broken_ping():
+        raise ConnectionError("simulated outage")
+    monkeypatch.setattr(main, "db_ping", broken_ping)
+    r = await client.get("/readyz")
+    assert r.status_code == 503
+    body = r.json()
+    assert body["status"] == "not_ready"
+    assert body["checks"]["postgres"].startswith("unavailable") and body["checks"]["redis"] == "ok"
