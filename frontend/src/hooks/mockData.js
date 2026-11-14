@@ -1,19 +1,25 @@
 // Generates realistic mock data when the backend is unavailable (Railway sleeping, etc.)
 
+// Same endpoint names, and the same response shapes, as the real backend
+// (see backend/log_generator.py and backend/anomaly_detector.py). Demo mode
+// exists so the UI still works with no backend reachable, so it must speak the
+// exact data contract the components read - a mock that drifts from the real
+// shape renders blank cards and NaN values.
 const ENDPOINTS = [
-  '/api/auth', '/api/checkout', '/api/cart', '/api/products',
-  '/api/search', '/api/inventory', '/api/payments', '/api/notifications',
+  '/api/products', '/api/search', '/api/inventory', '/api/cart',
+  '/api/auth/login', '/api/orders', '/api/checkout', '/api/users/profile',
 ]
+const SLO_TARGET = 0.99  // mirrors backend config.SLO_TARGET's default
 
 const SERVICES = {
-  '/api/auth':          { name: 'Auth',          deps: [] },
-  '/api/checkout':      { name: 'Checkout',       deps: ['/api/auth', '/api/cart', '/api/payments'] },
-  '/api/cart':          { name: 'Cart',           deps: ['/api/auth', '/api/inventory'] },
-  '/api/products':      { name: 'Products',       deps: ['/api/inventory'] },
-  '/api/search':        { name: 'Search',         deps: ['/api/products'] },
-  '/api/inventory':     { name: 'Inventory',      deps: [] },
-  '/api/payments':      { name: 'Payments',       deps: [] },
-  '/api/notifications': { name: 'Notifications',  deps: ['/api/auth'] },
+  '/api/auth/login':    { name: 'Auth',      deps: [] },
+  '/api/checkout':      { name: 'Checkout',  deps: ['/api/auth/login', '/api/cart', '/api/orders'] },
+  '/api/cart':          { name: 'Cart',      deps: ['/api/auth/login', '/api/inventory'] },
+  '/api/products':      { name: 'Products',  deps: ['/api/inventory'] },
+  '/api/search':        { name: 'Search',    deps: ['/api/products'] },
+  '/api/inventory':     { name: 'Inventory', deps: [] },
+  '/api/orders':        { name: 'Orders',    deps: ['/api/auth/login'] },
+  '/api/users/profile': { name: 'Profile',   deps: ['/api/auth/login'] },
 }
 
 function rand(min, max) { return min + Math.random() * (max - min) }
@@ -32,7 +38,16 @@ const SCENARIO_PROFILES = {
 let _scenario = 'normal'
 let _tick = 0
 
-export function setMockScenario(s) { _scenario = SCENARIO_PROFILES[s] ? s : 'normal' }
+// Anomalies must carry a STABLE detected_at for the life of a scenario, like the
+// real backend's do: the toast and feed code dedupe on detected_at + endpoint,
+// so a timestamp regenerated every tick made the same fake incident look brand
+// new each second and re-fired its toast forever.
+let _scenarioStartedAt = Date.now()
+
+export function setMockScenario(s) {
+  _scenario = SCENARIO_PROFILES[s] ? s : 'normal'
+  _scenarioStartedAt = Date.now()
+}
 export function getMockScenario()  { return _scenario }
 
 export function generateLogBatch(batchSize = 30) {
@@ -69,6 +84,22 @@ function mockErrorMsg(scenario, ep) {
   return pick(msgs[scenario] || ['internal server error'])
 }
 
+// One endpoint's health entry in the real backend shape: latencies in
+// `*_ms`, error_rate as a FRACTION (0.18 = 18%), plus the SLO fields.
+function healthEntry(status, latencyMs, errorRate) {
+  const allowed = 1 - SLO_TARGET
+  return {
+    status,
+    avg_latency_ms: latencyMs,
+    p95_latency_ms: Math.round(latencyMs * 1.6),
+    error_rate: +errorRate.toFixed(3),
+    uptime_pct: +((1 - errorRate) * 100).toFixed(1),
+    error_budget_remaining_pct: +((1 - errorRate / allowed) * 100).toFixed(1),
+    burn_rate: +(errorRate / allowed).toFixed(2),
+    sample_size: randInt(180, 300),
+  }
+}
+
 export function generateHealthSnapshot() {
   const profile = SCENARIO_PROFILES[_scenario]
   const snap = {}
@@ -84,35 +115,27 @@ export function generateHealthSnapshot() {
     if (!baseOk && (ep === '/api/checkout' || ep === '/api/cart') && _scenario !== 'normal') {
       status = 'critical'
     }
-    snap[ep] = {
-      endpoint: ep,
-      status,
-      avg_latency: latency,
-      error_rate:  errPct,
-      request_count: randInt(180, 300),
-      p95_latency: Math.round(latency * 1.6),
-    }
+    snap[ep] = healthEntry(status, latency, errPct / 100)
   }
   return snap
 }
 
 export function generateAnomalies() {
   if (_scenario === 'normal') return []
-  const now = new Date()
   const chains = {
     db_slowdown:   [
-      { service: '/api/auth',     impact: 'Auth latency +340%' },
-      { service: '/api/cart',     impact: 'Cart timeouts increasing' },
-      { service: '/api/checkout', impact: 'Checkout cascade failure' },
+      { service: '/api/auth/login', impact: 'Auth latency +340%' },
+      { service: '/api/cart',       impact: 'Cart timeouts increasing' },
+      { service: '/api/checkout',   impact: 'Checkout cascade failure' },
     ],
     memory_leak:   [
       { service: '/api/search',   impact: 'Search heap at 87%' },
       { service: '/api/products', impact: 'Products response degraded' },
     ],
     rate_limit_cascade:    [
-      { service: '/api/auth',     impact: 'Auth returning 429' },
-      { service: '/api/checkout', impact: 'Checkout blocked — no auth tokens' },
-      { service: '/api/payments', impact: 'Payment flow halted' },
+      { service: '/api/auth/login',    impact: 'Auth returning 429' },
+      { service: '/api/users/profile', impact: 'Profile calls blocked, no auth tokens' },
+      { service: '/api/checkout',      impact: 'Checkout blocked, no auth tokens' },
     ],
     network_partition: [
       { service: '/api/inventory',  impact: 'Inventory unreachable' },
@@ -121,20 +144,22 @@ export function generateAnomalies() {
     ],
   }
   const chain = chains[_scenario] || []
+  const isLatencyScenario = _scenario === 'db_slowdown' || _scenario === 'memory_leak'
   return chain.map((c, i) => ({
     id: 1000 + i,
-    anomaly_type: _scenario === 'db_slowdown' ? 'latency_spike'
-                : _scenario === 'memory_leak'  ? 'memory_pressure'
-                : _scenario === 'rate_limit_cascade'   ? 'error_surge'
-                : 'connectivity_failure',
-    severity: i === 0 ? 'critical' : 'high',
+    anomaly_type: isLatencyScenario ? 'latency_spike' : 'error_surge',
+    severity: i === 0 ? 'critical' : 'warning',
     endpoint: c.service,
     description: c.impact,
-    detected_at: new Date(now - (chain.length - i) * 12000).toISOString(),
-    root_cause_chain: chain.slice(0, i + 1).map(x => x.service),
-    value: rand(200, 900),
-    threshold: 200,
-    z_score: rand(3.2, 8.5),
+    detected_at: new Date(_scenarioStartedAt - (chain.length - i) * 12000).toISOString(),
+    // Same object shape the real detector emits (anomaly_detector._build_evidence_chain)
+    root_cause_chain: chain.slice(0, i + 1).map((x, j) => ({
+      step: j + 1,
+      component: x.service,
+      signal: x.impact,
+      confidence: +Math.max(0.5, 0.96 - j * 0.11).toFixed(2),
+    })),
+    z_score: +rand(3.6, 8.5).toFixed(2),
   }))
 }
 
@@ -191,7 +216,7 @@ export function generateInitialHealthHistory(snapshots = 40) {
     const ts = now - (snapshots - i) * 5000
     const snap = {}
     for (const ep of ENDPOINTS) {
-      snap[ep] = { endpoint: ep, status: 'healthy', avg_latency: randInt(65, 95), error_rate: 0 }
+      snap[ep] = healthEntry('healthy', randInt(65, 95), 0)
     }
     return { ts, data: snap }
   })
