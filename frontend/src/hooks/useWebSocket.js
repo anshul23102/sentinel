@@ -12,7 +12,19 @@ const API_URL = BACKEND
 // people on the same public demo link no longer see each other's scenario
 // changes or anomalies. The id is generated once and persisted, so a page
 // reload keeps the same world instead of starting a fresh one.
+// Opening the dashboard as /?session=live-myapp attaches it to that session
+// instead (and remembers it), which is how you watch data you are sending to
+// POST /api/ingest. The value must match the backend's accepted id shape;
+// anything else is ignored. Sessions carry no authentication by design, so
+// treat a session id like an unlisted URL, not like a password.
+const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
+
 function getSessionId() {
+  const requested = new URLSearchParams(window.location.search).get('session')
+  if (requested && SESSION_ID_PATTERN.test(requested)) {
+    localStorage.setItem('sentinel_session_id', requested)
+    return requested
+  }
   let sid = localStorage.getItem('sentinel_session_id')
   if (!sid) {
     sid = crypto.randomUUID()
@@ -144,6 +156,11 @@ export function useWebSocket() {
 
       socket.onclose = () => {
         if (!isCurrent()) return  // superseded by a newer socket — not a real disconnect
+        // In demo mode the demo loop owns the connected flag. A reconnect
+        // attempt that was already in flight when demo mode started fails
+        // later, and without this guard it flipped the sidebar to "Off"
+        // while the simulated feed was visibly running.
+        if (isMock.current) return
         setConnected(false)
         if (!isMock.current) {
           // Schedule demo fallback if not already running

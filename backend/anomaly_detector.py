@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -24,6 +25,35 @@ from slo import error_budget_remaining, burn_rate
 # are env-configurable via config.py (SENTINEL_ANOMALY_* env vars).
 ISOLATION_MIN_SAMPLES  = 15     # need enough history before the multivariate model means anything
 PREDICTION_WINDOW      = 5      # seconds ahead to project
+ERROR_BASELINE_FLOOR   = 0.005  # never assume a perfectly-zero baseline error rate
+MIN_BATCH_FOR_ERROR_Z  = 5      # one tick with fewer requests than this can't support a proportion z-test
+
+def _proportion_z(observed_rate: float, baseline_rate: float, n: int) -> float:
+    """One-proportion z-test: how many standard errors the error rate seen in
+    THIS tick's batch sits above the endpoint's own baseline error rate.
+
+    Error rate is a proportion, so the right yardstick is the binomial
+    standard error sqrt(p0 * (1 - p0) / n), not a median/MAD of the raw
+    status codes (an earlier version z-scored the status-code numbers
+    themselves, which is meaningless: 200 vs 500 is a category change, not a
+    quantity, and it printed absurd figures like '102 robust-sigma'). The
+    baseline is read BEFORE the batch is added, so this never scores a value
+    against a baseline that already contains it. Below MIN_BATCH_FOR_ERROR_Z
+    requests the normal approximation is unreliable, so this returns 0.0 and
+    the caller reports the plain rates without claiming a sigma value."""
+    if n < MIN_BATCH_FOR_ERROR_Z:
+        return 0.0
+    p0 = min(max(baseline_rate, ERROR_BASELINE_FLOOR), 0.5)
+    se = math.sqrt(p0 * (1.0 - p0) / n)
+    return (observed_rate - p0) / se
+
+def _rate_percentile(current: float, history: list[float]) -> float:
+    """Fraction of this endpoint's own recent per-tick error rates that the
+    current rate exceeds. Same 'not enough history yet' honesty rule as the
+    latency confidence: returns 0.0 below 10 prior points."""
+    if len(history) < 10:
+        return 0.0
+    return round(float((np.array(history, dtype=float) < current).mean()), 2)
 
 def _robust_stats(window: list[float]) -> tuple[float, float]:
     """(median, mad) for a window, with the same zero-MAD epsilon fallback
@@ -121,9 +151,11 @@ async def process_log_batch(sid: str, logs: list[dict]) -> list[dict]:
         lat_z = _robust_z_single(avg_latency, latency_window_before)
         lat_confidence = _percentile_confidence(lat_z, _robust_z_series(latency_window_before))
 
-        last_status = float(batch[-1]["status_code"])
-        err_z = _robust_z_single(last_status, error_window_before)
-        err_confidence = _percentile_confidence(err_z, _robust_z_series(error_window_before))
+        # Error evidence: this tick's batch error rate vs the endpoint's own
+        # pre-batch baseline, as a one-proportion z-test (see _proportion_z).
+        batch_err_rate    = _error_rate([float(entry["status_code"]) for entry in batch])
+        baseline_err_rate = _error_rate(error_window_before)
+        err_z = _proportion_z(batch_err_rate, baseline_err_rate, len(batch))
 
         # NOW push this batch — it becomes part of the baseline for the next tick.
         for log in batch:
@@ -147,6 +179,18 @@ async def process_log_batch(sid: str, logs: list[dict]) -> list[dict]:
         await state.push_feature_row(sid, endpoint, [avg_latency, err_rate, float(len(batch))])
         feature_window = await state.get_feature_window(sid, endpoint)
         mv_score, mv_confidence = _multivariate_anomaly(feature_window)
+
+        # How unusual is the current windowed error rate compared with this
+        # endpoint's own recent per-tick history? (feature_window[:-1] excludes
+        # the row just pushed, again so the value isn't ranked against itself.)
+        err_confidence = _rate_percentile(err_rate, [row[1] for row in feature_window[:-1]])
+
+        def _chain() -> list[dict]:
+            return _build_evidence_chain(
+                endpoint, avg_latency, err_rate, lat_z, err_z, lat_confidence, err_confidence,
+                mv_score, mv_confidence, seasonal_fit, seasonal_z, cusum_fired, cusum_mag,
+                baseline_err_rate=baseline_err_rate, err_batch_n=len(batch),
+            )
 
         # CUSUM on the per-tick AGGREGATED latency series (not raw per-request
         # values — confirmed via testing that raw per-request CUSUM is
@@ -180,7 +224,7 @@ async def process_log_batch(sid: str, logs: list[dict]) -> list[dict]:
                     "severity":        severity,
                     "endpoint":        endpoint,
                     "description":     f"Latency spike: avg {avg_latency:.0f}ms (robust z={lat_z:.1f}σ, more extreme than {lat_confidence*100:.0f}% of recent history). Holt forecast: {predicted_latency:.0f}ms in {PREDICTION_WINDOW}s.",
-                    "root_cause_chain": _build_evidence_chain(endpoint, avg_latency, err_rate, lat_z, err_z, lat_confidence, err_confidence, mv_score, mv_confidence, seasonal_fit, seasonal_z, cusum_fired, cusum_mag),
+                    "root_cause_chain": _chain(),
                     "z_score":         round(lat_z, 2),
                     "avg_latency":     round(avg_latency, 1),
                     "predicted_latency": round(predicted_latency, 1),
@@ -207,7 +251,7 @@ async def process_log_batch(sid: str, logs: list[dict]) -> list[dict]:
                     "severity":        severity,
                     "endpoint":        endpoint,
                     "description":     f"Error surge: {err_rate*100:.1f}% failure rate (threshold {ERROR_RATE_THRESHOLD*100:.0f}%). Trend: {'rising' if predicted_err_rate > err_rate else 'stable'}.",
-                    "root_cause_chain": _build_evidence_chain(endpoint, avg_latency, err_rate, lat_z, err_z, lat_confidence, err_confidence, mv_score, mv_confidence, seasonal_fit, seasonal_z, cusum_fired, cusum_mag),
+                    "root_cause_chain": _chain(),
                     "error_rate":       round(err_rate, 3),
                     "predicted_error_rate": round(max(0.0, predicted_err_rate), 3),
                     "multivariate_score": round(mv_score, 3),
@@ -229,7 +273,7 @@ async def process_log_batch(sid: str, logs: list[dict]) -> list[dict]:
                     "severity":        "critical" if cusum_mag > 15 else "warning",
                     "endpoint":        endpoint,
                     "description":     f"Sustained regime shift detected via CUSUM (magnitude {cusum_mag:.1f}σ, threshold 10σ) — behavior has persistently changed, not a single noisy tick.",
-                    "root_cause_chain": _build_evidence_chain(endpoint, avg_latency, err_rate, lat_z, err_z, lat_confidence, err_confidence, mv_score, mv_confidence, seasonal_fit, seasonal_z, cusum_fired, cusum_mag),
+                    "root_cause_chain": _chain(),
                     "cusum_magnitude": cusum_mag,
                 }
                 await state.set_active_anomaly(sid, cp_key, anomaly)
@@ -245,24 +289,38 @@ def _build_evidence_chain(endpoint: str, avg_latency: float, err_rate: float,
                            lat_z: float, err_z: float, lat_confidence: float,
                            err_confidence: float, mv_score: float, mv_confidence: float,
                            seasonal_fit: dict | None = None, seasonal_z: float = 0.0,
-                           cusum_fired: bool = False, cusum_mag: float = 0.0) -> list[dict]:
+                           cusum_fired: bool = False, cusum_mag: float = 0.0,
+                           baseline_err_rate: float = 0.0, err_batch_n: int = 0) -> list[dict]:
     """Every entry here is a real computed deviation on this endpoint's own
     recent history — not a hardcoded infrastructure narrative. Ranks latency
     and error-rate deviations by how extreme they actually are, then reports
     the multivariate (combined-signal) score as the final, honest confidence
     that this is a genuine joint anomaly rather than one noisy metric."""
+    if err_batch_n >= MIN_BATCH_FOR_ERROR_Z:
+        err_detail = (f"{err_rate*100:.1f}% failing vs a {baseline_err_rate*100:.1f}% baseline, "
+                      f"{err_z:.1f} standard errors above it (this tick's {err_batch_n} requests)")
+    else:
+        # Too few requests in one tick for a z-test to mean anything - report
+        # the plain rates and don't claim a sigma value we can't back up.
+        err_detail = f"{err_rate*100:.1f}% failing vs a {baseline_err_rate*100:.1f}% baseline over the recent window"
     signals = [
         ("Latency",    lat_z, lat_confidence, f"{avg_latency:.0f}ms avg, {lat_z:.1f} robust-σ from this endpoint's own recent baseline"),
-        ("Error rate", err_z, err_confidence, f"{err_rate*100:.1f}% failing, {err_z:.1f} robust-σ from this endpoint's own recent baseline"),
+        ("Error rate", err_z, err_confidence, err_detail),
     ]
     signals.sort(key=lambda s: abs(s[1]), reverse=True)
 
     chain = []
-    for i, (name, z, confidence, detail) in enumerate(signals, start=1):
-        if abs(z) < 1.0:
+    for name, z, confidence, detail in signals:
+        # A deviation counts as a contributor if it is >= 1 sigma on its own
+        # scale, OR (error rate only) if the windowed error rate itself crossed
+        # the detection threshold - the alert fired on that rate, so leaving
+        # it out of its own explanation would be wrong even when the single
+        # tick was too small for a z-test.
+        crossed_threshold = name == "Error rate" and err_rate > ERROR_RATE_THRESHOLD
+        if abs(z) < 1.0 and not crossed_threshold:
             continue  # not a meaningful contributor — don't manufacture a step for it
         chain.append({
-            "step": i,
+            "step": len(chain) + 1,
             "component": name,
             "signal": detail,
             "confidence": confidence,

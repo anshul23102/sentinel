@@ -94,6 +94,12 @@ async def init_db():
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_sid_ep_ts ON logs(session_id, endpoint, timestamp)")
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_anomalies_sid ON anomalies(session_id, detected_at)")
 
+async def ping() -> None:
+    """Cheapest possible round trip to Postgres, for the /readyz probe. Raises
+    if the pool is missing, saturated (3s acquire timeout) or the DB is down."""
+    async with _pool.acquire(timeout=3) as conn:
+        await conn.fetchval("SELECT 1")
+
 def _cutoff(minutes: int) -> str:
     """Compute the ISO timestamp cutoff in Python, not SQL — keeps queries DB-agnostic."""
     return (datetime.now(timezone.utc) - timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%S")

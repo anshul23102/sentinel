@@ -1,8 +1,12 @@
 import numpy as np
 import pytest
+import math
+
 from anomaly_detector import (
     _robust_z_series, _robust_z_single, _percentile_confidence, _error_rate,
     _multivariate_anomaly, process_log_batch, get_health_snapshot,
+    _proportion_z, _rate_percentile, _build_evidence_chain,
+    ERROR_BASELINE_FLOOR, MIN_BATCH_FOR_ERROR_Z,
 )
 
 
@@ -191,3 +195,85 @@ async def test_sessions_do_not_see_each_others_detector_state(sid):
     snapshot_b = await get_health_snapshot(other_sid)
     assert "/api/cart" in snapshot_a
     assert snapshot_b == {}  # a never-touched session sees nothing from sid
+
+
+# ---------------------------------------------------------------------------
+# Error-rate evidence: one-proportion z-test, not a z-score of status codes.
+# An earlier version z-scored the raw HTTP status-code numbers (200 vs 500),
+# which is statistically meaningless and printed figures like "102 robust-
+# sigma" in the incident UI. These tests pin the corrected behavior against
+# values computed by hand.
+# ---------------------------------------------------------------------------
+
+def test_proportion_z_matches_the_hand_computed_value():
+    # p0 = 0.005, n = 30  ->  se = sqrt(0.005 * 0.995 / 30)
+    expected = (0.15 - 0.005) / math.sqrt(0.005 * 0.995 / 30)
+    assert _proportion_z(0.15, 0.005, 30) == pytest.approx(expected)
+    assert expected == pytest.approx(11.26, abs=0.01)  # sanity: a sane number, not 102
+
+
+def test_proportion_z_is_zero_when_nothing_changed():
+    assert _proportion_z(0.02, 0.02, 40) == pytest.approx(0.0)
+
+
+def test_proportion_z_floors_a_zero_baseline():
+    # A perfectly clean history must not make the standard error zero
+    # (division by zero) or the score infinite.
+    assert _proportion_z(0.2, 0.0, 30) == pytest.approx(_proportion_z(0.2, ERROR_BASELINE_FLOOR, 30))
+    assert math.isfinite(_proportion_z(0.2, 0.0, 30))
+
+
+def test_proportion_z_refuses_to_score_a_tiny_batch():
+    assert _proportion_z(1.0, 0.0, MIN_BATCH_FOR_ERROR_Z - 1) == 0.0
+
+
+def test_rate_percentile_ranks_against_own_history_and_degrades_honestly():
+    history = [0.0, 0.01, 0.0, 0.02, 0.0, 0.01, 0.0, 0.0, 0.03, 0.0]
+    assert _rate_percentile(0.2, history) == 1.0
+    assert _rate_percentile(0.0, history) == 0.0
+    assert _rate_percentile(0.2, history[:5]) == 0.0  # < 10 prior points: no claim
+
+
+def _chain(err_rate, err_z, err_batch_n):
+    return _build_evidence_chain(
+        "/api/checkout", avg_latency=70.0, err_rate=err_rate, lat_z=0.2, err_z=err_z,
+        lat_confidence=0.1, err_confidence=0.95, mv_score=0.0, mv_confidence=0.0,
+        baseline_err_rate=0.004, err_batch_n=err_batch_n,
+    )
+
+
+def test_evidence_chain_reports_standard_errors_for_a_large_batch():
+    chain = _chain(err_rate=0.18, err_z=9.4, err_batch_n=30)
+    step = next(c for c in chain if c["component"] == "Error rate")
+    assert "standard errors" in step["signal"] and "robust" not in step["signal"]
+    assert "0.4% baseline" in step["signal"]
+
+
+def test_evidence_chain_makes_no_sigma_claim_for_a_tiny_batch_but_still_explains_the_alert():
+    # Windowed rate crossed the 15% threshold, but this one tick only had 3
+    # requests. The error step must still appear (the alert fired on it) -
+    # just without a sigma value the data can't support.
+    chain = _chain(err_rate=0.30, err_z=0.0, err_batch_n=3)
+    step = next(c for c in chain if c["component"] == "Error rate")
+    assert "standard errors" not in step["signal"] and "σ" not in step["signal"]
+    assert [c["step"] for c in chain] == list(range(1, len(chain) + 1))  # contiguous numbering
+
+
+@pytest.mark.asyncio
+async def test_a_real_error_surge_explains_itself_with_baseline_and_no_status_code_sigma(sid):
+    for _ in range(3):
+        await process_log_batch(sid, [
+            {"endpoint": "/api/orders", "latency_ms": 70.0 + (i % 5), "status_code": 200} for i in range(30)
+        ])
+    detected = None
+    for _ in range(4):
+        anomalies = await process_log_batch(sid, [
+            {"endpoint": "/api/orders", "latency_ms": 72.0, "status_code": 503 if i < 9 else 200} for i in range(30)
+        ])
+        detected = next((a for a in anomalies if a["anomaly_type"] == "error_surge"), None)
+        if detected:
+            break
+    assert detected is not None
+    error_step = next(c for c in detected["root_cause_chain"] if c["component"] == "Error rate")
+    assert "baseline" in error_step["signal"]
+    assert "robust" not in error_step["signal"]

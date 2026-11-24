@@ -286,7 +286,10 @@ function PredictiveInsights({ timeseries, health }) {
 
     if (latSlope > 12) {
       const sla = 200
-      const minsLeft = Math.max(0.5, (sla - curLat) / (latSlope * 12))
+      // latSlope is ms per sample and samples arrive once per second, so
+      // (headroom / slope) is SECONDS until breach; divide by 60 for minutes.
+      // (This previously divided by slope*12, overstating the time left ~5x.)
+      const minsLeft = Math.max(0.5, (sla - curLat) / (latSlope * 60))
       results.push({
         type: curLat > sla ? 'critical' : 'warning',
         icon: '⏱',

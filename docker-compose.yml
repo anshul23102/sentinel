@@ -1,4 +1,35 @@
+# Full local stack: Postgres + Redis + backend + frontend.
+#   GROQ_API_KEY=... docker compose up --build
+# The credentials below are for local development only. Do not reuse them for
+# anything exposed to a network.
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: sentinel
+      POSTGRES_DB: sentinel
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinel"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # Redis only holds hot sliding-window state that the detector rebuilds
+    # within a minute, so persistence is switched off (no RDB snapshots, no AOF).
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -7,18 +38,43 @@ services:
     env_file:
       - path: ./backend/.env
         required: false
+    environment:
+      # `environment` wins over env_file, so a copied .env.example that points
+      # at localhost can't break the container's connection to the services.
+      DATABASE_URL: postgresql://sentinel:sentinel@postgres:5432/sentinel
+      REDIS_URL: redis://redis:6379/0
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      # The containerized frontend is served from :8080, not Vite's :5173.
+      CORS_ORIGINS: http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # /readyz verifies Postgres and Redis are reachable and never creates a
+      # session, so polling it does not spawn background tasks.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
     restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       # Vite inlines VITE_* values into the built bundle at build time, not
-      # at container runtime — an `environment:` entry here would have no
-      # effect on the static files nginx serves, so it has to be a build arg.
+      # at container runtime, so an `environment:` entry here would have no
+      # effect on the static files nginx serves. It has to be a build arg.
       args:
         VITE_BACKEND_URL: http://localhost:8000
     ports:
       - "8080:8080"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  pgdata:

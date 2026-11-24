@@ -320,8 +320,19 @@ function EndpointRow({ endpoint, stats, index, latencyHistory }) {
               { label: 'P95 Latency', val: `${stats.p95_latency_ms}ms`, warn: stats.p95_latency_ms > info.sla * 2, warnColor: '#fbbf24' },
               { label: 'Avg Latency', val: `${stats.avg_latency_ms}ms`, warn: !slaOk, warnColor: '#f87171' },
               { label: 'Uptime',      val: `${uptime}%`, warn: uptime < 95, warnColor: uptime < 90 ? '#f87171' : '#fbbf24' },
+              // SLO accounting from the backend (backend/slo.py, 99% target by default):
+              // budget left = share of allowed failures not yet spent (negative = SLO breached);
+              // burn rate = how many times faster than sustainable the budget is being spent.
+              ...(stats.burn_rate !== undefined ? [
+                { label: 'Error Budget', hint: 'Share of the allowed error budget still unspent. Negative means the SLO is breached.',
+                  val: `${stats.error_budget_remaining_pct}%`, warn: stats.error_budget_remaining_pct < 25,
+                  warnColor: stats.error_budget_remaining_pct < 0 ? '#f87171' : '#fbbf24' },
+                { label: 'Burn Rate', hint: '1.0x spends the budget exactly on pace for the SLO window; higher means too fast.',
+                  val: `${stats.burn_rate}x`, warn: stats.burn_rate > 1,
+                  warnColor: stats.burn_rate > 5 ? '#f87171' : '#fbbf24' },
+              ] : []),
             ].map(m => (
-              <div key={m.label} style={{
+              <div key={m.label} title={m.hint} style={{
                 background: m.warn ? `rgba(${m.warnColor === '#f87171' ? '248,113,113' : '251,191,36'},0.08)` : 'var(--bg-025)',
                 border: `1px solid ${m.warn ? (m.warnColor === '#f87171' ? 'rgba(248,113,113,0.2)' : 'rgba(251,191,36,0.18)') : 'var(--text-06)'}`,
                 borderRadius: 10, padding: '10px 12px',

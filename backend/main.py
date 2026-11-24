@@ -7,17 +7,18 @@ import re
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, Request, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field, ValidationError
 
 load_dotenv()
 
-from db import init_db, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs, prune_old_anomalies, upsert_seasonal_bucket, delete_session_data  # noqa: E402
+from db import init_db, ping as db_ping, bulk_insert_logs, get_recent_logs, get_recent_anomalies, get_endpoint_stats, get_timeseries, insert_anomaly, prune_old_logs, prune_old_anomalies, upsert_seasonal_bucket, delete_session_data  # noqa: E402
 from log_generator import run_generator, set_scenario, get_current_scenario, SCENARIOS, SIM_DAY_SECONDS, BUCKETS_PER_DAY  # noqa: E402
 from anomaly_detector import process_log_batch, get_health_snapshot, run_anomaly_scan  # noqa: E402
 from ai_agent import analyze_anomaly, chat, chat_stream, generate_incident_report  # noqa: E402
@@ -122,35 +123,52 @@ async def get_session_id(request: Request, x_session_id: Optional[str] = Header(
     session_manager.touch(sid)
     return sid
 
+# Session ids starting with this prefix are "real data" sessions: nothing in
+# them is ever simulated. They exist to be fed through POST /api/ingest by an
+# actual service, so the synthetic traffic generator must never run for them -
+# otherwise fake requests would be mixed into someone's real telemetry.
+LIVE_SESSION_PREFIX = "live-"
+
+def is_live_session(sid: str) -> bool:
+    return sid.startswith(LIVE_SESSION_PREFIX)
+
 async def _ensure_session(sid: str):
     async def _start() -> list[asyncio.Task]:
-        supervisor.register(f"log_pipeline:{sid}", lambda: log_pipeline(sid))
         supervisor.register(f"periodic_scan:{sid}", lambda: periodic_scan(sid))
-        await supervisor.start_task(f"log_pipeline:{sid}")
         await supervisor.start_task(f"periodic_scan:{sid}")
-        return [
-            supervisor._tasks[f"log_pipeline:{sid}"].task,
-            supervisor._tasks[f"periodic_scan:{sid}"].task,
-        ]
+        tasks = [supervisor._tasks[f"periodic_scan:{sid}"].task]
+        if not is_live_session(sid):
+            supervisor.register(f"log_pipeline:{sid}", lambda: log_pipeline(sid))
+            await supervisor.start_task(f"log_pipeline:{sid}")
+            tasks.insert(0, supervisor._tasks[f"log_pipeline:{sid}"].task)
+        return tasks
     await session_manager.ensure_running(sid, _start)
 
 # ── Background pipeline (per session) ───────────────────────────────────────
+async def _detect_and_publish(sid: str, logs: list[dict]) -> list[dict]:
+    """The shared detection step for BOTH data sources (the built-in simulator
+    and POST /api/ingest): run the detector over a batch of log dicts, persist
+    each new anomaly, push it to the session's dashboards, and kick off AI
+    root-cause analysis without blocking. Returns the anomalies it raised."""
+    new_anomalies = await process_log_batch(sid, logs)
+    for anomaly in new_anomalies:
+        # Insert FIRST so anomaly has an ID before AI analysis references it
+        anomaly_id     = await insert_anomaly(sid, anomaly)
+        anomaly["id"]  = anomaly_id
+        await manager.broadcast(sid, {"type": "anomaly", "data": anomaly})
+        # Non-blocking AI analysis - ID is already in anomaly dict
+        task = asyncio.create_task(_async_ai_analysis(sid, anomaly))
+        task.add_done_callback(
+            lambda t: t.exception() and print(f"[AI] Analysis task failed: {t.exception()}")
+        )
+    return new_anomalies
+
 async def log_pipeline(sid: str):
     """One session's pipeline: generate logs → detect anomalies → broadcast,
     scoped entirely to that session's own simulated world."""
     async def broadcast_and_detect(message: dict):
         if message["type"] == "logs":
-            new_anomalies = await process_log_batch(sid, message["data"])
-            for anomaly in new_anomalies:
-                # Insert FIRST so anomaly has an ID before AI analysis references it
-                anomaly_id     = await insert_anomaly(sid, anomaly)
-                anomaly["id"]  = anomaly_id
-                await manager.broadcast(sid, {"type": "anomaly", "data": anomaly})
-                # Non-blocking AI analysis — ID is already in anomaly dict
-                task = asyncio.create_task(_async_ai_analysis(sid, anomaly))
-                task.add_done_callback(
-                    lambda t: t.exception() and print(f"[AI] Analysis task failed: {t.exception()}")
-                )
+            await _detect_and_publish(sid, message["data"])
         await manager.broadcast(sid, message)
 
     await run_generator(sid, broadcast_and_detect, rps=LOG_RPS)
@@ -224,6 +242,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Orchestrator probes. Deliberately NOT session-scoped: /api/health creates a
+# session (and its background tasks) for any caller with a fresh id, so a
+# probe that polled it every few seconds would mint sessions forever.
+@app.get("/healthz")
+async def healthz():
+    """Liveness: the process is up and the event loop is responsive."""
+    return {"status": "ok"}
+
+@app.get("/readyz")
+async def readyz():
+    """Readiness: can this instance actually serve traffic, i.e. are both
+    Postgres and Redis reachable right now. 503 (not 500) when they aren't, so
+    a load balancer or `docker compose --wait` treats it as "not ready yet"."""
+    checks: dict[str, str] = {}
+    try:
+        await db_ping()
+        checks["postgres"] = "ok"
+    except Exception as exc:
+        checks["postgres"] = f"unavailable: {type(exc).__name__}"
+    try:
+        await asyncio.wait_for(state.get_client().ping(), timeout=3)
+        checks["redis"] = "ok"
+    except Exception as exc:
+        checks["redis"] = f"unavailable: {type(exc).__name__}"
+    ready = all(v == "ok" for v in checks.values())
+    return JSONResponse({"status": "ready" if ready else "not_ready", "checks": checks},
+                        status_code=200 if ready else 503)
+
 # REST endpoints
 # GET routes are read-only but were previously completely unguarded — no
 # auth, no rate limit — while every mutating/AI-cost route already had one.
@@ -269,6 +315,8 @@ class ScenarioRequest(BaseModel):
 
 @app.post("/api/scenario", dependencies=[Depends(rate_limit("scenario", limit=20, window_seconds=60)), Depends(require_api_key)])
 async def inject_scenario(req: ScenarioRequest, sid: str = Depends(get_session_id)):
+    if is_live_session(sid):
+        raise HTTPException(409, "Failure simulation is disabled for live-* sessions: they only ever contain data sent to /api/ingest.")
     if req.scenario not in SCENARIOS:
         raise HTTPException(400, f"Unknown scenario. Valid: {list(SCENARIOS.keys())}")
     await set_scenario(sid, req.scenario, req.intensity)
@@ -353,6 +401,95 @@ async def export_incidents(format: str = "csv", limit: int = 1000, sid: str = De
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=sentinel_incidents.csv"},
     )
+
+# ── Real log ingestion ─────────────────────────────────────────────────────
+# Everything above this point can run on Sentinel's built-in traffic
+# simulator. This is the other data source: a real service posts its own
+# request telemetry here and it goes through the exact same detector, storage,
+# and dashboard path. Use a session id starting with "live-" (see
+# LIVE_SESSION_PREFIX) so no synthetic traffic is ever mixed into it.
+MAX_INGEST_BODY_BYTES      = 256 * 1024   # hard cap on one request body
+MAX_INGEST_BATCH           = 500          # log records per request
+MAX_INGEST_ENDPOINTS_BATCH = 50           # distinct endpoints per request
+MAX_ENDPOINTS_PER_SESSION  = 100          # distinct endpoints a session may ever track
+_HTTP_METHODS = r"^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$"
+
+class IngestLog(BaseModel):
+    # Route TEMPLATES ("/api/users/{id}"), not raw URLs: every distinct value
+    # here becomes its own tracked endpoint with its own Redis windows and
+    # detector models, so a caller sending /users/1, /users/2, ... would
+    # otherwise create unbounded state. The per-session cap below enforces it.
+    endpoint:      str   = Field(..., min_length=1, max_length=200, pattern=r"^/[A-Za-z0-9_\-./:{}]*$")
+    status_code:   int   = Field(..., ge=100, le=599)
+    latency_ms:    float = Field(..., ge=0, le=600_000)
+    method:        str   = Field("GET", pattern=_HTTP_METHODS)
+    service:       str   = Field("external", min_length=1, max_length=100)
+    error_message: Optional[str] = Field(None, max_length=500)
+
+class IngestRequest(BaseModel):
+    logs: list[IngestLog] = Field(..., min_length=1, max_length=MAX_INGEST_BATCH)
+
+async def _read_capped_body(request: Request, limit: int) -> bytes:
+    """Read the request body but abort the moment it exceeds `limit`.
+    Checking Content-Length alone isn't enough (chunked uploads omit it), so
+    this counts the bytes actually received."""
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > limit:
+        raise HTTPException(413, f"Request body too large (max {limit} bytes)")
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > limit:
+            raise HTTPException(413, f"Request body too large (max {limit} bytes)")
+    return bytes(body)
+
+@app.post("/api/ingest", dependencies=[Depends(rate_limit("ingest", limit=60, window_seconds=60)), Depends(require_api_key)])
+async def ingest_logs(request: Request, sid: str = Depends(get_session_id)):
+    """Accept a batch of real request logs for this session and run them
+    through the detector. Timestamps are always stamped server-side: letting
+    a client back-date records would let it write into (and poison) the
+    time-windowed baselines the detector depends on."""
+    raw = await _read_capped_body(request, MAX_INGEST_BODY_BYTES)
+    try:
+        payload = IngestRequest.model_validate_json(raw)
+    except ValidationError as exc:
+        raise HTTPException(422, json.loads(exc.json(include_url=False, include_context=False)))
+
+    endpoints_in_batch = {entry.endpoint for entry in payload.logs}
+    if len(endpoints_in_batch) > MAX_INGEST_ENDPOINTS_BATCH:
+        raise HTTPException(422, f"Too many distinct endpoints in one request (max {MAX_INGEST_ENDPOINTS_BATCH}). Send route templates, not raw URLs.")
+    known = set(await state.get_known_endpoints(sid))
+    if len(known | endpoints_in_batch) > MAX_ENDPOINTS_PER_SESSION:
+        raise HTTPException(422, f"This session already tracks {len(known)} endpoints; the limit is {MAX_ENDPOINTS_PER_SESSION}. Send route templates, not raw URLs.")
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    rows = [{
+        "timestamp":     now,
+        "endpoint":      entry.endpoint,
+        "method":        entry.method,
+        "status_code":   entry.status_code,
+        "latency_ms":    entry.latency_ms,
+        "error_message": entry.error_message,
+        "service":       entry.service,
+        "user_id":       None,
+        "metadata":      {"source": "ingest"},
+    } for entry in payload.logs]
+
+    await bulk_insert_logs(sid, rows)
+    new_anomalies = await _detect_and_publish(sid, rows)
+    await manager.broadcast(sid, {"type": "logs", "data": [{
+        "timestamp": row["timestamp"], "endpoint": row["endpoint"], "method": row["method"],
+        "status_code": row["status_code"], "latency_ms": row["latency_ms"],
+        "error_message": row["error_message"],
+    } for row in rows]})
+    return {
+        "accepted": len(rows),
+        "session_id": sid,
+        "anomalies": [
+            {"id": a.get("id"), "type": a["anomaly_type"], "severity": a["severity"], "endpoint": a["endpoint"]}
+            for a in new_anomalies
+        ],
+    }
 
 # WebSocket
 @app.websocket("/ws")
