@@ -29,6 +29,6 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      - uses: github/codeql-action/analyze@4bfa242aa49c5f7c6770b98670d354a7dfac05f8 # v3
+      - uses: github/codeql-action/analyze@915412ff23e8b7659517e607487dbeae018f2934 # v3
         with:
           category: "/language:${{ matrix.language }}"
